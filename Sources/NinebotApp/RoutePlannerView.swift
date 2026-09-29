@@ -76,11 +76,9 @@ struct RoutePlannerView: View {
 
                     Section {
                         Button {
-                            destination.openInMaps(launchOptions: [
-                                MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeCycling
-                            ])
+                            planner.openInMaps(destination)
                         } label: {
-                            Label("In Apple Maps navigieren (Fahrrad)", systemImage: "bicycle")
+                            Label("In Apple Maps navigieren", systemImage: "bicycle")
                         }
                     } footer: {
                         Text("Handy beim Fahren nur in einer festen Halterung nutzen und nicht bedienen.")
@@ -161,7 +159,27 @@ final class RoutePlanner: ObservableObject {
         results = []
         route = nil
         error = nil
-        calculate(to: item, transport: .cycling)
+        if #available(iOS 26.0, *) {
+            calculate(to: item, transport: .cycling)
+        } else {
+            calculate(to: item, transport: .walking)
+        }
+    }
+
+    /// Übergibt das Ziel an Apple Maps, ab iOS 26 direkt im Fahrradmodus.
+    func openInMaps(_ item: MKMapItem) {
+        if #available(iOS 26.0, *) {
+            item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeCycling])
+        } else {
+            item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDefault])
+        }
+    }
+
+    private func isCycling(_ transport: MKDirectionsTransportType) -> Bool {
+        if #available(iOS 26.0, *) {
+            return transport == .cycling
+        }
+        return false
     }
 
     private func calculate(to item: MKMapItem, transport: MKDirectionsTransportType) {
@@ -173,8 +191,8 @@ final class RoutePlanner: ObservableObject {
             guard let self = self else { return }
             if let route = response?.routes.first {
                 self.route = route
-                self.isCyclingRoute = transport == .cycling
-            } else if transport == .cycling {
+                self.isCyclingRoute = self.isCycling(transport)
+            } else if self.isCycling(transport) {
                 self.calculate(to: item, transport: .walking)
             } else {
                 self.error = "Keine Route gefunden. Ist der Standort erlaubt?"
