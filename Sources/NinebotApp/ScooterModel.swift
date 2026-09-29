@@ -103,7 +103,8 @@ final class ScooterModel: ObservableObject {
     private var scanID = 0
     private var pollTimer: Timer?
     private var isPolling = false
-    private var autoPaused = false
+    /// Automatisches Verbinden pausiert (nach „Trennen“ oder drei Fehlversuchen).
+    @Published private(set) var autoPaused = false
     private var handshakeFailures = 0
     private var lastActiveSave = Date.distantPast
 
@@ -184,7 +185,7 @@ final class ScooterModel: ObservableObject {
             }
             return "Verbinde …"
         case .initializing: return "Handshake …"
-        case .waitingForButtonPress: return "Jetzt den Power-Knopf am Scooter kurz drücken!"
+        case .waitingForButtonPress: return "Jetzt den Startknopf am Scooter kurz drücken!"
         case .pairing: return "Kopple …"
         case .authenticated: return "Verbunden"
         case .failed(let reason): return "Fehlgeschlagen: \(reason)"
@@ -311,6 +312,7 @@ final class ScooterModel: ObservableObject {
 
         case .authenticated:
             handshakeFailures = 0
+            maintenance.requestNotificationPermission()   // für Wartungs-Erinnerungen
             if let scooter = currentScooter { remember(scooter) }
             startTrip()
             startPolling()

@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 
 struct DocumentsView: View {
     @EnvironmentObject private var store: DocumentStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var addingKind: DocumentKind?
 
     var body: some View {
@@ -20,6 +21,11 @@ struct DocumentsView: View {
                 documentList
             } else {
                 lockedView
+            }
+        }
+        .overlay {
+            if scenePhase != .active && store.requireFaceID {
+                Rectangle().fill(.regularMaterial).ignoresSafeArea()
             }
         }
         .navigationTitle("Dokumente")
@@ -124,6 +130,12 @@ struct DocumentDetailView: View {
     @State private var confirmDelete = false
 
     var body: some View {
+        DocumentLockGate {
+            detail
+        }
+    }
+
+    @ViewBuilder private var detail: some View {
         if let document = store.documents.first(where: { $0.id == documentID }) {
             List {
                 Section {
@@ -176,14 +188,47 @@ struct DocumentArchiveView: View {
     @EnvironmentObject private var store: DocumentStore
 
     var body: some View {
-        List(store.archive) { document in
-            NavigationLink {
-                DocumentDetailView(documentID: document.id)
-            } label: {
-                DocumentRow(document: document)
+        DocumentLockGate {
+            List(store.archive) { document in
+                NavigationLink {
+                    DocumentDetailView(documentID: document.id)
+                } label: {
+                    DocumentRow(document: document)
+                }
             }
         }
         .navigationTitle("Archiv")
+    }
+}
+
+/// Zeigt den Inhalt nur, wenn die Dokumente entsperrt sind, und verdeckt ihn,
+/// sobald die App in den Hintergrund geht (auch in der App-Übersicht).
+struct DocumentLockGate<Content: View>: View {
+    @EnvironmentObject private var store: DocumentStore
+    @Environment(\.scenePhase) private var scenePhase
+    let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        ZStack {
+            if store.isAccessible {
+                content()
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "lock.fill").font(.system(size: 44)).foregroundColor(.secondary)
+                    Button("Mit Face ID entsperren") { store.unlock() }
+                        .buttonStyle(.borderedProminent)
+                }
+                .onAppear { store.unlock() }
+            }
+            if scenePhase != .active && store.requireFaceID {
+                Rectangle().fill(.regularMaterial).ignoresSafeArea()
+                Image(systemName: "lock.fill").font(.system(size: 44)).foregroundColor(.secondary)
+            }
+        }
     }
 }
 

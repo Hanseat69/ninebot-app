@@ -7,7 +7,7 @@
 //  F-Serie getestet ist:
 //  1. INIT: Scooter liefert seinen BLE-Schlüssel und die Seriennummer.
 //  2. PING mit zufälligem App-Schlüssel. Antwort-Index 0 = noch nicht gekoppelt:
-//     dann den POWER-Knopf am Scooter drücken, bis er bestätigt.
+//     dann den Startknopf am Scooter kurz drücken, bis er bestätigt.
 //  3. PAIR mit der Seriennummer → verbunden.
 //
 //  Nur mit dem eigenen Fahrzeug verwenden — der Handshake erfordert ohnehin den

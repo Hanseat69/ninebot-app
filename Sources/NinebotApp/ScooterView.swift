@@ -89,7 +89,7 @@ struct ScooterView: View {
         } header: {
             Text("Scooter in der Nähe")
         } footer: {
-            Text("Scooter einschalten und in der Nähe bleiben. Beim ersten Verbinden fordert die App dich auf, den Power-Knopf am Scooter kurz zu drücken.")
+            Text("Scooter einschalten und in der Nähe bleiben. Beim ersten Verbinden fordert die App dich auf, den Startknopf am Scooter kurz zu drücken.")
         }
     }
 
@@ -150,7 +150,7 @@ struct ScooterView: View {
         } header: {
             Text("Einstellungen")
         } footer: {
-            Text("Die Referenz liest diese Werte nur; das Schreiben ist ungetestet. Nach jeder Änderung liest die App den Wert zur Kontrolle neu aus. Der Regler endet bei 20 km/h, dem gesetzlichen Maximum in Deutschland (eKFV).")
+            Text("Das Ändern dieser Einstellungen ist am echten Scooter noch nicht erprobt. Nach jeder Änderung liest die App den Wert zur Kontrolle neu aus. Der Regler endet bei 20 km/h, dem gesetzlichen Maximum in Deutschland (eKFV).")
         }
     }
 
@@ -247,7 +247,7 @@ struct ScooterView: View {
             Toggle("Automatisch verbinden", isOn: $model.autoConnect)
             if let known = model.knownScooter {
                 ValueRow(title: "Mein Scooter", value: known.name)
-                if model.state == .idle && model.autoConnect {
+                if model.autoPaused && model.autoConnect {
                     Button("Automatik fortsetzen") { model.resumeAutoConnect() }
                 }
                 Button("Scooter vergessen", role: .destructive) { model.forgetScooter() }
