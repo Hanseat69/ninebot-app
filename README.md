@@ -53,17 +53,42 @@ neuer Build nötig, außer du hast den Code geändert).
 
 ## Was steckt in der App
 
-1. **Scooter suchen:** Die App findet Ninebot-Scooter in der Nähe anhand der
-   Ninebot-Herstellerkennung in der Bluetooth-Werbung. Ein fester Gerätename
-   ist nicht nötig — einfach den eigenen Scooter in der Liste antippen.
-2. **Koppeln:** Beim ersten Verbinden fordert die App auf, den **Power-Knopf**
-   am Scooter kurz zu drücken (60 Sekunden Zeit).
-3. **Werte:** Akku (%, Spannung, Strom, Temperatur, Zustand), Restreichweite,
-   Gesamtkilometer, Fahrzeugtemperatur, Fahrmodus, Tempolimits, Sperrstatus,
-   Fehlercode, Firmware und Seriennummer.
-4. **Tempolimit (Begrenzungsmodus):** Setzt die Höchstgeschwindigkeit im
-   Begrenzungsmodus (6–20 km/h). Der Regler endet bewusst bei 20 km/h, dem
-   gesetzlichen Maximum für E-Scooter in Deutschland (eKFV).
+**Tab „Scooter“**
+1. **Scooter suchen und verbinden:** Die App findet Ninebot-Scooter anhand der
+   Herstellerkennung. Beim ersten Verbinden den **Power-Knopf** am Scooter kurz
+   drücken, wenn die App dazu auffordert.
+2. **Automatisch verbinden:** Danach merkt sich die App den Scooter und
+   verbindet sich beim Einschalten von selbst — auch im Hintergrund.
+3. **Live-Werte** (alle 5 Sekunden): Akku, Restreichweite, Spannung, Strom,
+   Strecke und Zeit seit dem Einschalten, Gesamtkilometer, GPS-Geschwindigkeit.
+4. **Einstellungen:** Tempolimit im Begrenzungsmodus (6–20 km/h),
+   Rekuperation (KERS), Tempomat, Rücklicht.
+5. **Fahrzeug:** Akkuzustand und -temperatur, Fahrzeugtemperatur, Fahrmodus,
+   Tempolimits, Sperrstatus, Fehlercode, Firmware, Seriennummer.
+
+**Tab „Fahrten“ — automatisches Fahrtenbuch**
+Solange der Scooter verbunden ist, wird die Fahrt aufgezeichnet; beim
+Ausschalten wird sie gespeichert (ab 1 Minute und 100 m): Datum, Abfahrt,
+Ankunft, Dauer, Strecke (laut Scooter und GPS), Ø- und Höchstgeschwindigkeit,
+Akku vorher/nachher, Verbrauch, Start- und Zieladresse, Karte der Strecke.
+Export als **GPX-Datei** (für Komoot, Strava, Google Earth …).
+
+**Tab „Akku“**
+Verlauf des Akkuzustands und Verbrauch pro Fahrt (% pro km).
+
+Der Regler für das Tempolimit endet bewusst bei 20 km/h, dem gesetzlichen
+Maximum für E-Scooter in Deutschland (eKFV).
+
+### Datenschutz
+
+- Fahrten, Akku-Verlauf und der gemerkte Scooter werden **nur auf dem iPhone**
+  gespeichert (Dokumente-Ordner der App bzw. App-Einstellungen).
+- Die App enthält keine Fremdbibliotheken, keine Werbung und keine Analyse.
+- Einzige Internetverbindungen: **Apple Karten** — Kartenkacheln für die
+  Streckenansicht und die Umwandlung von Start/Ziel in Adressen. Dabei gehen die
+  jeweiligen Koordinaten an Apple, sonst an niemanden.
+- Berechtigungen: Bluetooth und Standort (für die Aufzeichnung im Hintergrund:
+  „Immer“).
 
 ### Grundlage und Stand
 
@@ -72,8 +97,8 @@ Protokoll, Verschlüsselung und Register folgen den Open-Source-Projekten
 Ninebot der F-Serie) und [miauth](https://github.com/dnandha/miauth).
 Die Verschlüsselung ist mit Testvektoren aus miauth geprüft und liefert
 Byte für Byte dasselbe Ergebnis. An einem echten F2 Pro getestet ist die App
-noch nicht. Das **Schreiben** des Tempolimits ist in der Referenz nicht
-enthalten (dort wird nur gelesen) — nach dem Setzen liest die App den Wert
+noch nicht. Das **Schreiben** der Einstellungen ist in der Referenz nicht
+enthalten (dort wird nur gelesen) — nach jeder Änderung liest die App den Wert
 zur Kontrolle erneut aus.
 
 Nur mit dem eigenen Fahrzeug verwenden.

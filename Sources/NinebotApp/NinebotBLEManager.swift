@@ -59,6 +59,7 @@ final class NinebotBLEManager: NSObject {
     private var notifyCharacteristic: CBCharacteristic?
     private var receiveBuffer: [UInt8] = []
     private var scanRequested = false
+    private var restoredPeripherals: [CBPeripheral] = []
 
     /// Auf true setzen, um alle BLE-Geräte statt nur Ninebot-Geräte anzuzeigen.
     /// Praktisch bei der ersten Fehlersuche.
@@ -74,10 +75,27 @@ final class NinebotBLEManager: NSObject {
     var onDisconnect: ((Error?) -> Void)?
     /// Bluetooth aus/nicht erlaubt oder Verbindungsaufbau gescheitert.
     var onError: ((Error) -> Void)?
+    /// Bluetooth ist (wieder) eingeschaltet und bereit.
+    var onPoweredOn: (() -> Void)?
 
     override init() {
         super.init()
-        centralManager = CBCentralManager(delegate: self, queue: nil)
+        // Mit Restore-Kennung startet iOS die App im Hintergrund neu, wenn sich der
+        // gemerkte Scooter meldet, selbst wenn die App zwischendurch beendet wurde.
+        centralManager = CBCentralManager(delegate: self, queue: nil, options: [
+            CBCentralManagerOptionRestoreIdentifierKey: "NinebotCentral"
+        ])
+    }
+
+    var isPoweredOn: Bool { centralManager.state == .poweredOn }
+
+    /// Findet einen früher verbundenen Scooter wieder, ohne zu suchen.
+    func peripheral(withIdentifier id: UUID) -> CBPeripheral? {
+        if let restored = restoredPeripherals.first(where: { $0.identifier == id }) {
+            return restored
+        }
+        guard isPoweredOn else { return nil }
+        return centralManager.retrievePeripherals(withIdentifiers: [id]).first
     }
 
     // MARK: - Öffentliche API
@@ -105,15 +123,21 @@ final class NinebotBLEManager: NSObject {
         }
     }
 
+    /// Verbindet mit dem Scooter. Ist er gerade aus, bleibt der Auftrag bestehen
+    /// und iOS verbindet, sobald er eingeschaltet wird (auch im Hintergrund).
     func connect(to peripheral: CBPeripheral) {
         stopScanning()
-        if let previous = scooterPeripheral, previous != peripheral {
+        if let previous = scooterPeripheral, previous.identifier != peripheral.identifier {
             centralManager.cancelPeripheralConnection(previous)
         }
         resetConnectionState()
         scooterPeripheral = peripheral
         peripheral.delegate = self
-        centralManager.connect(peripheral, options: nil)
+        if peripheral.state == .connected {
+            peripheral.discoverServices([NinebotBLE.uartServiceUUID])
+        } else {
+            centralManager.connect(peripheral, options: nil)
+        }
     }
 
     func disconnect() {
@@ -195,9 +219,15 @@ extension NinebotBLEManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn {
             if scanRequested { startScanning() }
+            onPoweredOn?()
         } else if let problem = bluetoothProblem(central.state) {
             onError?(NinebotBLEError.bluetoothUnavailable(problem))
         }
+    }
+
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
+        restoredPeripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
+        restoredPeripherals.forEach { $0.delegate = self }
     }
 
     func centralManager(_ central: CBCentralManager,
@@ -219,7 +249,7 @@ extension NinebotBLEManager: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager,
                         didFailToConnect peripheral: CBPeripheral,
                         error: Error?) {
-        guard peripheral == scooterPeripheral else { return }
+        guard peripheral.identifier == scooterPeripheral?.identifier else { return }
         scooterPeripheral = nil
         onError?(error ?? NinebotBLEError.connectionFailed)
     }
@@ -227,7 +257,7 @@ extension NinebotBLEManager: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager,
                         didDisconnectPeripheral peripheral: CBPeripheral,
                         error: Error?) {
-        guard peripheral == scooterPeripheral else { return }   // alte Verbindung
+        guard peripheral.identifier == scooterPeripheral?.identifier else { return }   // alte Verbindung
         scooterPeripheral = nil
         resetConnectionState()
         onDisconnect?(error)

@@ -128,52 +128,106 @@ enum NinebotValue {
         return "\(v >> 8).\((v >> 4) & 0x0F).\(v & 0x0F)"
     }
 
+    /// Gesamtkilometer: 32 Bit aus zwei Registern, Einheit Meter.
+    static func kilometers(_ d: [UInt8]) -> Double {
+        Double(u32(d)) / 1000
+    }
+
+    static func duration(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds)
+        return s >= 3600
+            ? String(format: "%d:%02d:%02d h", s / 3600, (s % 3600) / 60, s % 60)
+            : String(format: "%d:%02d min", s / 60, s % 60)
+    }
+
     static func decimal(_ value: Double, _ digits: Int, _ unit: String) -> String {
         String(format: "%.\(digits)f %@", locale: Locale.current, value, unit)
     }
 }
 
 extension NinebotRegister {
-    /// Werte, die ninebot-ble an der F-Serie ausliest.
-    static let overview: [NinebotRegister] = [
-        NinebotRegister("Akku", .battery, 0x32) { "\(NinebotValue.le16($0)) %" },
-        NinebotRegister("Akkuspannung", .battery, 0x34) {
-            NinebotValue.decimal(Double(NinebotValue.le16($0)) / 100, 2, "V")
-        },
-        NinebotRegister("Akkustrom", .battery, 0x33) {
-            NinebotValue.decimal(Double(NinebotValue.les16($0)) / 100, 2, "A")
-        },
-        NinebotRegister("Akkutemperatur", .battery, 0x35) { "\((NinebotValue.le16($0) & 0xFF) - 20) °C" },
-        NinebotRegister("Akkuzustand", .battery, 0x3B) { "\(NinebotValue.le16($0)) %" },
-        NinebotRegister("Restreichweite", .controller, 0x25) {
-            NinebotValue.decimal(Double(NinebotValue.le16($0)) / 100, 1, "km")
-        },
-        NinebotRegister("Gesamtkilometer", .controller, 0x29, count: 2) {
-            NinebotValue.decimal(Double(NinebotValue.u32($0)) / 1000, 1, "km")
-        },
-        NinebotRegister("Fahrzeugtemperatur", .controller, 0x3E) {
-            NinebotValue.decimal(Double(NinebotValue.le16($0)) / 10, 1, "°C")
-        },
-        NinebotRegister("Fahrmodus", .controller, 0x75) {
-            switch NinebotValue.le16($0) {
-            case 0: return "Normal"
-            case 1: return "Eco"
-            case 2: return "Sport"
-            case let other: return "Unbekannt (\(other))"
-            }
-        },
-        NinebotRegister("Tempolimit normal", .controller, 0x73) {
-            NinebotValue.decimal(Double(NinebotValue.les16($0)) / 10, 1, "km/h")
-        },
-        NinebotRegister("Tempolimit Begrenzungsmodus", .controller, speedLimitRegister) {
-            NinebotValue.decimal(Double(NinebotValue.les16($0)) / 10, 1, "km/h")
-        },
-        NinebotRegister("Gesperrt", .controller, 0x1D) { NinebotValue.le16($0) & 0x02 != 0 ? "Ja" : "Nein" },
-        NinebotRegister("Fehlercode", .controller, 0x1B) { "\(NinebotValue.le16($0))" },
-        NinebotRegister("Firmware", .controller, 0x1A) { NinebotValue.version($0) },
-        NinebotRegister("Seriennummer", .controller, 0x10, count: 7) { NinebotValue.text($0) },
+    // Alle Register und Einheiten wie in ninebot-ble (F-Serie).
+
+    // MARK: Akku (BMS)
+    static let batteryPercent = NinebotRegister("Akku", .battery, 0x32) { "\(NinebotValue.le16($0)) %" }
+    static let batteryVoltage = NinebotRegister("Akkuspannung", .battery, 0x34) {
+        NinebotValue.decimal(Double(NinebotValue.le16($0)) / 100, 2, "V")
+    }
+    static let batteryCurrent = NinebotRegister("Akkustrom", .battery, 0x33) {
+        NinebotValue.decimal(Double(NinebotValue.les16($0)) / 100, 2, "A")
+    }
+    static let batteryTemperature = NinebotRegister("Akkutemperatur", .battery, 0x35) {
+        "\((NinebotValue.le16($0) & 0xFF) - 20) °C"
+    }
+    static let batteryHealth = NinebotRegister("Akkuzustand", .battery, 0x3B) { "\(NinebotValue.le16($0)) %" }
+
+    // MARK: Fahrzeug
+    static let remainingRange = NinebotRegister("Restreichweite", .controller, 0x25) {
+        NinebotValue.decimal(Double(NinebotValue.le16($0)) / 100, 1, "km")
+    }
+    static let totalMileage = NinebotRegister("Gesamtkilometer", .controller, 0x29, count: 2) {
+        NinebotValue.decimal(NinebotValue.kilometers($0), 1, "km")
+    }
+    static let tripDistance = NinebotRegister("Strecke seit Einschalten", .controller, 0xB9) {
+        NinebotValue.decimal(Double(NinebotValue.le16($0)) / 100, 2, "km")
+    }
+    static let tripTime = NinebotRegister("Zeit seit Einschalten", .controller, 0xBA) {
+        NinebotValue.duration(TimeInterval(NinebotValue.le16($0)))
+    }
+    static let bodyTemperature = NinebotRegister("Fahrzeugtemperatur", .controller, 0x3E) {
+        NinebotValue.decimal(Double(NinebotValue.le16($0)) / 10, 1, "°C")
+    }
+    static let workMode = NinebotRegister("Fahrmodus", .controller, 0x75) {
+        switch NinebotValue.le16($0) {
+        case 0: return "Normal"
+        case 1: return "Eco"
+        case 2: return "Sport"
+        case let other: return "Unbekannt (\(other))"
+        }
+    }
+    static let normalSpeedLimit = NinebotRegister("Tempolimit normal", .controller, 0x73) {
+        NinebotValue.decimal(Double(NinebotValue.les16($0)) / 10, 1, "km/h")
+    }
+    /// NB_CTL_LITSPEED: Tempolimit im Begrenzungsmodus, Einheit 0,1 km/h.
+    static let speedLimit = NinebotRegister("Tempolimit Begrenzungsmodus", .controller, 0x74) {
+        NinebotValue.decimal(Double(NinebotValue.les16($0)) / 10, 1, "km/h")
+    }
+    static let locked = NinebotRegister("Gesperrt", .controller, 0x1D) {
+        NinebotValue.le16($0) & 0x02 != 0 ? "Ja" : "Nein"
+    }
+    static let errorCode = NinebotRegister("Fehlercode", .controller, 0x1B) { "\(NinebotValue.le16($0))" }
+    static let firmware = NinebotRegister("Firmware", .controller, 0x1A) { NinebotValue.version($0) }
+    static let serialNumber = NinebotRegister("Seriennummer", .controller, 0x10, count: 7) { NinebotValue.text($0) }
+
+    // MARK: Einstellungen (lesbar laut Referenz; Schreiben ist dort nicht getestet)
+    static let kers = NinebotRegister("Rekuperation (KERS)", .controller, 0x7B) {
+        switch NinebotValue.le16($0) {
+        case 0: return "Aus"
+        case 1: return "Mittel"
+        case 2: return "Stark"
+        case let other: return "Unbekannt (\(other))"
+        }
+    }
+    static let cruiseControl = NinebotRegister("Tempomat", .controller, 0x7C) {
+        NinebotValue.le16($0) != 0 ? "An" : "Aus"
+    }
+    static let tailLight = NinebotRegister("Rücklicht", .controller, 0x7D) {
+        NinebotValue.le16($0) != 0 ? "An" : "Aus"
+    }
+
+    // MARK: Gruppen für die Anzeige
+
+    /// Wird während der Verbindung alle paar Sekunden gelesen.
+    static let live: [NinebotRegister] = [
+        batteryPercent, remainingRange, batteryVoltage, batteryCurrent,
+        tripDistance, tripTime, totalMileage,
     ]
 
-    /// NB_CTL_LITSPEED: Tempolimit im Begrenzungsmodus, Einheit 0,1 km/h.
-    static let speedLimitRegister: UInt8 = 0x74
+    /// Wird beim Verbinden und auf Knopfdruck gelesen.
+    static let overview: [NinebotRegister] = [
+        batteryHealth, batteryTemperature, bodyTemperature, workMode,
+        normalSpeedLimit, speedLimit, locked, errorCode, firmware, serialNumber,
+    ]
+
+    static let settings: [NinebotRegister] = [kers, cruiseControl, tailLight]
 }

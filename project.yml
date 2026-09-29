@@ -15,6 +15,11 @@ targets:
       properties:
         CFBundleDisplayName: NinebotApp
         NSBluetoothAlwaysUsageDescription: "Wird benötigt, um per Bluetooth mit deinem Scooter zu verbinden"
+        NSLocationWhenInUseUsageDescription: "Für das Fahrtenbuch: zeichnet die Strecke deiner Fahrten auf. Die Daten bleiben auf deinem iPhone."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Damit Fahrten auch automatisch aufgezeichnet werden, wenn die App im Hintergrund ist. Die Daten bleiben auf deinem iPhone."
+        UIBackgroundModes:
+          - bluetooth-central
+          - location
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
