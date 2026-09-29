@@ -82,9 +82,9 @@ struct DemoRootView: View {
         case "route-home":
             MainTabView(selection: .route)
         case "route":
-            MainTabView(selection: .route, routeDemoQuery: "Elbphilharmonie Hamburg")
+            MainTabView(selection: .route, routeDemoQuery: "Stadtpark Hamburg")
         case "navigation":
-            MainTabView(selection: .route, routeDemoQuery: "Elbphilharmonie Hamburg", routeDemoNavigate: true)
+            MainTabView(selection: .route, routeDemoQuery: "Stadtpark Hamburg", routeDemoNavigate: true)
         case "trips":
             MainTabView(selection: .trips)
         case "trip-detail":

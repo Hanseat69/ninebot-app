@@ -315,6 +315,8 @@ struct NavigationScreen: View {
             } label: {
                 Text("Ende")
                     .font(.headline)
+                    .lineLimit(1)
+                    .fixedSize()
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Color.red))

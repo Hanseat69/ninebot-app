@@ -136,7 +136,7 @@ struct SpecsHelp: View {
         List {
             Section {
                 ValueRow(title: "Modell", value: "051203D (Deutschland) · 051203E")
-                ValueRow(title: "Höchstgeschwindigkeit", value: "ca. 20 km/h (D) · 25 km/h (E)")
+                ValueRow(title: "Höchsttempo", value: "20 km/h (D) · 25 km/h (E)")
                 ValueRow(title: "Reichweite (theoretisch)", value: "ca. 55 km")
                 ValueRow(title: "Max. Steigung", value: "ca. 22 %")
                 ValueRow(title: "Motor", value: "450 W, max. 900 W")
