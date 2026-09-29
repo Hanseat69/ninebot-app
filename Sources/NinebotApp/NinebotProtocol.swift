@@ -195,7 +195,9 @@ extension NinebotRegister {
     static let locked = NinebotRegister("Gesperrt", .controller, 0x1D) {
         NinebotValue.le16($0) & 0x02 != 0 ? "Ja" : "Nein"
     }
-    static let errorCode = NinebotRegister("Fehlercode", .controller, 0x1B) { "\(NinebotValue.le16($0))" }
+    static let errorCode = NinebotRegister("Fehlercode", .controller, 0x1B) {
+        ScooterErrorCode.describe(NinebotValue.le16($0))
+    }
     static let firmware = NinebotRegister("Firmware", .controller, 0x1A) { NinebotValue.version($0) }
     static let serialNumber = NinebotRegister("Seriennummer", .controller, 0x10, count: 7) { NinebotValue.text($0) }
 

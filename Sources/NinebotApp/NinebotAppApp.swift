@@ -18,6 +18,8 @@ struct NinebotAppApp: App {
                     .tabItem { Label("Fahrten", systemImage: "map") }
                 BatteryView()
                     .tabItem { Label("Akku", systemImage: "battery.75") }
+                HelpView()
+                    .tabItem { Label("Hilfe", systemImage: "questionmark.circle") }
             }
             .environmentObject(model)
             .environmentObject(model.store)
