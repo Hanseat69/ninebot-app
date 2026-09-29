@@ -1,0 +1,125 @@
+name: Screenshots
+
+# Erstellt eine Screenshot-Reihe der App im iOS-Simulator (Demo-Modus mit
+# Beispieldaten). Läuft auf Knopfdruck oder bei Commits mit "[screenshots]"
+# in der Nachricht, damit nicht bei jedem Push Mac-Minuten verbraucht werden.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "claude/**"]
+
+jobs:
+  screenshots:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]')
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest available Xcode
+        run: |
+          LATEST_XCODE=$(ls /Applications | grep -E '^Xcode_[0-9]+\.[0-9]+(\.[0-9]+)?\.app$' | sort -V | tail -n1)
+          sudo xcode-select -s "/Applications/$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Install XcodeGen and generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Pick an iPhone Pro simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          found = []
+          for runtime, items in devices.items():
+              if "iOS" not in runtime:
+                  continue
+              for d in items:
+                  if d["name"].startswith("iPhone") and "Pro" in d["name"] and "Max" not in d["name"]:
+                      found.append((runtime, d["name"], d["udid"]))
+          found.sort()
+          print(found[-1][2])
+          ')
+          xcrun simctl list devices | grep "$UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build for simulator (Debug, with demo mode)
+        run: |
+          xcodebuild build \
+            -project NinebotApp.xcodeproj \
+            -scheme NinebotApp \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO | tail -n 20
+
+      - name: Take screenshots
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          BID=com.antoine.ninebotapp
+          APP=build/Build/Products/Debug-iphonesimulator/NinebotApp.app
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+          xcrun simctl location "$UDID" set 53.5413,9.9841
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl privacy "$UDID" grant location-always "$BID" || true
+          xcrun simctl privacy "$UDID" grant photos "$BID" || true
+          mkdir -p screenshots
+
+          n=0
+          shoot() {
+            local name=$1 wait=${2:-5} prefix=${3:-}
+            n=$((n + 1))
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BID" -demoScreen "$name" -AppleLanguages "(de)" -AppleLocale de_DE >/dev/null
+            sleep "$wait"
+            xcrun simctl io "$UDID" screenshot "screenshots/$(printf '%02d' $n)-${prefix}${name}.png"
+          }
+
+          # Aufwärmen (erster Start dauert länger)
+          shoot scooter-top 8 && rm screenshots/01-*.png && n=0
+
+          xcrun simctl ui "$UDID" appearance light
+          shoot scooter-top
+          shoot scooter-settings
+          shoot scooter-vehicle
+          shoot scooter-more
+          shoot scooter-automation
+          shoot scooter-pairing
+          shoot scooter-idle
+          shoot route-home 10
+          shoot route 15
+          shoot navigation 18
+          shoot trips
+          shoot trip-detail 12
+          shoot battery
+          shoot maintenance
+          shoot documents
+          shoot document-detail
+          shoot document-editor
+          shoot help
+          shoot help-specs
+          shoot help-errors
+          shoot help-pdf 6
+
+          xcrun simctl ui "$UDID" appearance dark
+          shoot scooter-top 5 dark-
+          shoot trip-detail 12 dark-
+          shoot battery 5 dark-
+          ls -la screenshots
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: NinebotApp-screenshots
+          path: screenshots
+          retention-days: 14

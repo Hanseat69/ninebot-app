@@ -1,198 +1,159 @@
 //
 //  NinebotCrypto.swift
-//  Implementatie van het "Encryption2" protocol dat Segway-Ninebot voertuigen
-//  gebruiken: AES-128 in een eigen CTR-achtige mode met CBC-MAC authenticatie
-//  (gelijkaardig aan, maar niet identiek met, NIST CCM).
+//  Implementierung des "Encryption2"-Protokolls, das Segway-Ninebot-Fahrzeuge
+//  verwenden: AES-128 in einem eigenen CTR-ähnlichen Modus mit CBC-MAC-Authentifizierung
+//  (ähnlich, aber nicht identisch mit NIST CCM).
 //
-//  Community-gedocumenteerd via reverse-engineering van de officiële app,
-//  gepubliceerd voor interoperabiliteit onder EU-richtlijn 2009/24/EC art. 6.
-//  Enkel voor gebruik met je EIGEN voertuig.
+//  1:1-Portierung von NbCrypto aus miauth (https://github.com/dnandha/miauth),
+//  das wiederum auf https://github.com/scooterhacking/NinebotCrypto basiert.
+//
+//  Von der Community per Reverse Engineering der offiziellen App dokumentiert,
+//  veröffentlicht zur Interoperabilität gemäß EU-Richtlinie 2009/24/EG Art. 6.
+//  Nur zur Verwendung mit dem EIGENEN Fahrzeug.
 //
 
 import Foundation
 import CryptoKit
 
-enum NinebotCrypto {
+final class NinebotCrypto {
 
-    // MARK: - Sleutelderivatie
+    /// Feste Konstante aus der Firmware; Startwert für Schlüssel und Keystream.
+    static let fwData: [UInt8] = [0x97, 0xCF, 0xB8, 0x02, 0x84, 0x41, 0x43, 0xDE,
+                                  0x56, 0x00, 0x2B, 0x3B, 0x34, 0x78, 0x0A, 0x5D]
 
-    /// aes_key = SHA-1(key1_pad16 ‖ key2_pad16)[0:16]
-    static func deriveKey(key1: [UInt8], key2: [UInt8]?) -> [UInt8] {
-        let k1 = pad16(key1)
-        let k2 = key2.map { pad16($0) } ?? [UInt8](repeating: 0, count: 16)
-        let digest = Insecure.SHA1.hash(data: Data(k1 + k2))
+    private let name: [UInt8]
+    private var bleData: [UInt8]?
+    private var sha1Key: [UInt8]
+
+    /// Nachrichtenzähler. Wird aus jeder Antwort des Scooters übernommen und vor
+    /// jedem Senden im SN-Modus um 1 erhöht. Solange er 0 ist, wird im
+    /// einfachen Modus (fester Keystream + Prüfsumme) verschlüsselt.
+    private(set) var counter: UInt32 = 0
+
+    /// - Parameter name: Bluetooth-Name des Scooters, so wie er ihn bewirbt.
+    init(name: [UInt8]) {
+        self.name = name
+        self.sha1Key = NinebotCrypto.deriveKey(name, NinebotCrypto.fwData)
+    }
+
+    // MARK: - Schlüsselwechsel während des Handshakes
+
+    /// Nach der Antwort auf INIT: Schlüssel = SHA-1(Name ‖ BLE-Schlüssel)
+    func setBleData(_ data: [UInt8]) {
+        bleData = data
+        sha1Key = NinebotCrypto.deriveKey(name, data)
+    }
+
+    /// Nach bestätigtem PING: Schlüssel = SHA-1(App-Schlüssel ‖ BLE-Schlüssel)
+    func setAppData(_ data: [UInt8]) {
+        sha1Key = NinebotCrypto.deriveKey(data, bleData ?? NinebotCrypto.fwData)
+    }
+
+    /// Macht setAppData rückgängig (Schlüssel = SHA-1(Name ‖ BLE-Schlüssel)).
+    func resetToBleData() {
+        sha1Key = NinebotCrypto.deriveKey(name, bleData ?? NinebotCrypto.fwData)
+    }
+
+    // MARK: - Verschlüsseln / Entschlüsseln
+
+    /// plaintext = [0x5A, 0xA5, LEN, SRC, DST, CMD, INDEX, DATA…]
+    /// Ergebnis = Header(3, unverschlüsselt) + Payload(verschlüsselt) + 4 Byte Tag/Prüfsumme + 2 Byte Zähler
+    func encrypt(_ plaintext: [UInt8]) -> [UInt8] {
+        let header = Array(plaintext.prefix(3))
+        let payload = Array(plaintext.dropFirst(3))
+
+        guard counter != 0, bleData != nil else {
+            let checksum = UInt16(truncatingIfNeeded: ~payload.reduce(0) { $0 + Int($1) })
+            return header + cryptFirst(payload)
+                + [0x00, 0x00, UInt8(checksum & 0xFF), UInt8(checksum >> 8), 0x00, 0x00]
+        }
+
+        counter &+= 1
+        let aes = aesData()
+        let tag = mac(header: header, payload: payload, aesData: aes)
+        return header + cryptNext(payload, aesData: aes) + tag
+            + [UInt8((counter >> 8) & 0xFF), UInt8(counter & 0xFF)]
+    }
+
+    /// Entschlüsselt einen vollständigen Frame und übernimmt dessen Zähler.
+    /// Ergebnis = [0x5A, 0xA5, LEN, SRC, DST, CMD, INDEX, DATA…]
+    func decrypt(_ frame: [UInt8]) -> [UInt8]? {
+        guard frame.count >= 9 else { return nil }
+        let header = Array(frame.prefix(3))
+        let payload = Array(frame[3..<(frame.count - 6)])
+
+        counter = (UInt32(frame[frame.count - 2]) << 8) | UInt32(frame[frame.count - 1])
+
+        if counter == 0 || bleData == nil {
+            return header + cryptFirst(payload)
+        }
+        return header + cryptNext(payload, aesData: aesData())
+    }
+
+    // MARK: - Bausteine
+
+    static func deriveKey(_ key1: [UInt8], _ key2: [UInt8]) -> [UInt8] {
+        let digest = Insecure.SHA1.hash(data: Data(pad16(key1) + pad16(key2)))
         return Array(digest.prefix(16))
     }
 
     private static func pad16(_ bytes: [UInt8]) -> [UInt8] {
-        var b = Array(bytes.prefix(16))
-        while b.count < 16 { b.append(0) }
-        return b
+        Array((bytes + [UInt8](repeating: 0, count: 16)).prefix(16))
     }
 
-    // MARK: - Nonce
-
-    /// nonce[13] = counter_BE[4] ‖ auth[0:8] ‖ 0x00
-    static func buildNonce(counter: UInt32, auth: [UInt8]) -> [UInt8] {
-        var nonce = [UInt8]()
-        nonce.append(UInt8((counter >> 24) & 0xFF))
-        nonce.append(UInt8((counter >> 16) & 0xFF))
-        nonce.append(UInt8((counter >> 8) & 0xFF))
-        nonce.append(UInt8(counter & 0xFF))
-        nonce.append(contentsOf: Array(auth.prefix(8)))
-        nonce.append(0x00)
-        return nonce
+    /// [0x01, Zähler (4 Byte, Big-Endian), BLE-Schlüssel[0..<8], 0, 0, 0]
+    private func aesData() -> [UInt8] {
+        let ble = bleData ?? NinebotCrypto.fwData
+        return [0x01,
+                UInt8((counter >> 24) & 0xFF), UInt8((counter >> 16) & 0xFF),
+                UInt8((counter >> 8) & 0xFF), UInt8(counter & 0xFF)]
+            + Array(ble.prefix(8)) + [0x00, 0x00, 0x00]
     }
 
-    // MARK: - SN-mode encryptie (na PRE_COMM, counter > 0)
+    /// Einfacher Modus: jeder 16-Byte-Block wird mit AES(Schlüssel, fwData) verknüpft.
+    private func cryptFirst(_ input: [UInt8]) -> [UInt8] {
+        let keystream = AES128.encryptBlock(key: sha1Key, block: NinebotCrypto.fwData)
+        return input.enumerated().map { $1 ^ keystream[$0 % 16] }
+    }
 
-    /// plaintext = [0x5A, 0xA5, LEN] + payload (SRC/TARGET/CMD/INDEX/DATA)
-    /// Geeft het volledige frame terug: header(3, plain) + ct(payload.count) + enc_tag(4) + counter_BE(2)
-    static func encryptSN(key: [UInt8], plaintext: [UInt8], counter: UInt32, auth: [UInt8]) -> [UInt8] {
-        let header = Array(plaintext.prefix(3))
-        let payload = Array(plaintext.dropFirst(3))
-        let nonce = buildNonce(counter: counter, auth: auth)
-
-        let rawTag = cbcMac(key: key, header: header, payload: payload, nonce: nonce)
-
-        var ct = [UInt8]()
-        var blockIndex: UInt8 = 1
-        var offset = 0
-        while offset < payload.count {
-            let aBlock: [UInt8] = [0x01] + nonce + [0x00, blockIndex]
-            let keystream = AES128.encryptBlock(key: key, block: aBlock)
-            let end = min(offset + 16, payload.count)
-            for j in offset..<end {
-                ct.append(payload[j] ^ keystream[j - offset])
+    /// SN-Modus: Block i (ab 1) wird mit AES(Schlüssel, aesData mit [15] = i) verknüpft.
+    private func cryptNext(_ input: [UInt8], aesData: [UInt8]) -> [UInt8] {
+        var block = aesData
+        var keystream = [UInt8]()
+        var output = [UInt8]()
+        for (i, byte) in input.enumerated() {
+            if i % 16 == 0 {
+                block[15] = UInt8(truncatingIfNeeded: i / 16 + 1)
+                keystream = AES128.encryptBlock(key: sha1Key, block: block)
             }
-            offset += 16
-            blockIndex &+= 1
+            output.append(byte ^ keystream[i % 16])
         }
-
-        let a0: [UInt8] = [0x01] + nonce + [0x00, 0x00]
-        let a0Keystream = AES128.encryptBlock(key: key, block: a0)
-        let encTag = zip(rawTag, a0Keystream.prefix(4)).map { $0 ^ $1 }
-
-        var frame = header
-        frame.append(contentsOf: ct)
-        frame.append(contentsOf: encTag)
-        frame.append(UInt8((counter >> 8) & 0xFF))
-        frame.append(UInt8(counter & 0xFF))
-        return frame
+        return output
     }
 
-    /// CBC-MAC over [header(3) + payload], teruggegeven als 4-byte tag
-    private static func cbcMac(key: [UInt8], header: [UInt8], payload: [UInt8], nonce: [UInt8]) -> [UInt8] {
-        let payloadLen = UInt8(payload.count & 0xFF)
-        let b0: [UInt8] = [0x59] + nonce + [0x00, payloadLen]
-        var x = AES128.encryptBlock(key: key, block: b0)
+    /// CBC-MAC über Header und Payload, mit AES(Schlüssel, aesData) zu 4 Byte verknüpft.
+    private func mac(header: [UInt8], payload: [UInt8], aesData: [UInt8]) -> [UInt8] {
+        var b0 = aesData
+        b0[0] = 0x59
+        b0[15] = UInt8(truncatingIfNeeded: payload.count)
+        var x = AES128.encryptBlock(key: sha1Key, block: b0)
 
-        var aad = header
-        while aad.count < 16 { aad.append(0) }
-        x = AES128.encryptBlock(key: key, block: zip(x, aad).map { $0 ^ $1 })
+        x = AES128.encryptBlock(key: sha1Key, block: xor(x, NinebotCrypto.pad16(header)))
 
         var offset = 0
         while offset < payload.count {
-            var block = Array(payload[offset..<min(offset+16, payload.count)])
-            while block.count < 16 { block.append(0) }
-            x = AES128.encryptBlock(key: key, block: zip(x, block).map { $0 ^ $1 })
-            offset += 16
-        }
-        return Array(x.prefix(4))
-    }
-
-    // MARK: - Non-SN-mode encryptie (enkel PRE_COMM request, counter == 0)
-
-    static func encryptNonSN(key: [UInt8], plaintext: [UInt8]) -> [UInt8] {
-        let header = Array(plaintext.prefix(3))
-        let payload = Array(plaintext.dropFirst(3))
-
-        var checksum: Int = 0
-        for b in payload { checksum += Int(b) }
-        let checksumVal = UInt16((~checksum) & 0xFFFF)
-
-        let keystream = AES128.encryptBlock(key: key, block: [UInt8](repeating: 0, count: 16))
-
-        var ct = [UInt8]()
-        var offset = 0
-        while offset < payload.count {
-            let end = min(offset + 16, payload.count)
-            for j in offset..<end {
-                ct.append(payload[j] ^ keystream[j - offset])
-            }
+            let chunk = Array(payload[offset..<min(offset + 16, payload.count)])
+            x = AES128.encryptBlock(key: sha1Key, block: xor(x, NinebotCrypto.pad16(chunk)))
             offset += 16
         }
 
-        var frame = header
-        frame.append(contentsOf: ct)
-        frame.append(0x00)
-        frame.append(0x00)
-        frame.append(UInt8((checksumVal) & 0xFF))
-        frame.append(UInt8((checksumVal >> 8) & 0xFF))
-        frame.append(0x00)
-        frame.append(0x00)
-        return frame
+        var a0 = aesData
+        a0[15] = 0
+        let s0 = AES128.encryptBlock(key: sha1Key, block: a0)
+        return Array(xor(x, s0).prefix(4))
     }
 
-    // MARK: - Decryptie (respons van de step)
-
-    enum DecryptError: Error {
-        case tooShort
-        case macMismatch
-        case replay
-    }
-
-    /// Decodeert een ontvangen frame. Bepaalt zelf SN vs non-SN op basis van de
-    /// counter-bytes op het einde (counter == 0 → non-SN mode).
-    static func decrypt(key: [UInt8], ciphertext: [UInt8], auth: [UInt8]) throws -> (plaintext: [UInt8], counter: UInt32) {
-        guard ciphertext.count >= 3 + 6 else { throw DecryptError.tooShort }
-
-        let header = Array(ciphertext.prefix(3))
-        let body = Array(ciphertext.dropFirst(3))
-        let trailer = Array(body.suffix(6))
-        let encPayload = Array(body.dropLast(6))
-
-        let counter = (UInt32(trailer[4]) << 8) | UInt32(trailer[5])
-
-        if counter == 0 {
-            // Non-SN mode: zelfde statische keystream, checksum ipv MAC
-            let keystream = AES128.encryptBlock(key: key, block: [UInt8](repeating: 0, count: 16))
-            var payload = [UInt8]()
-            var offset = 0
-            while offset < encPayload.count {
-                let end = min(offset + 16, encPayload.count)
-                for j in offset..<end {
-                    payload.append(encPayload[j] ^ keystream[j - offset])
-                }
-                offset += 16
-            }
-            return (header + payload, 0)
-        } else {
-            let nonce = buildNonce(counter: counter, auth: auth)
-            var payload = [UInt8]()
-            var blockIndex: UInt8 = 1
-            var offset = 0
-            while offset < encPayload.count {
-                let aBlock: [UInt8] = [0x01] + nonce + [0x00, blockIndex]
-                let keystream = AES128.encryptBlock(key: key, block: aBlock)
-                let end = min(offset + 16, encPayload.count)
-                for j in offset..<end {
-                    payload.append(encPayload[j] ^ keystream[j - offset])
-                }
-                offset += 16
-                blockIndex &+= 1
-            }
-
-            // Tag verifiëren
-            let a0: [UInt8] = [0x01] + nonce + [0x00, 0x00]
-            let a0Keystream = AES128.encryptBlock(key: key, block: a0)
-            let encTag = Array(trailer.prefix(4))
-            let rawTag = zip(encTag, a0Keystream.prefix(4)).map { $0 ^ $1 }
-
-            let expectedTag = cbcMac(key: key, header: header, payload: payload, nonce: nonce)
-            guard rawTag == expectedTag else { throw DecryptError.macMismatch }
-
-            return (header + payload, counter)
-        }
+    private func xor(_ a: [UInt8], _ b: [UInt8]) -> [UInt8] {
+        zip(a, b).map { $0 ^ $1 }
     }
 }

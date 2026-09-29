@@ -1,58 +1,122 @@
-# NinebotApp — bouwen zonder Mac
+# Scooterbrise — iOS-App für den Segway-Ninebot F2 Pro
 
-Deze repo bevat een iOS-app (SwiftUI + CoreBluetooth) die via GitHub Actions
-automatisch gebouwd wordt tot een `.ipa`-bestand, zonder dat je zelf een Mac
-of Xcode nodig hebt.
+**Scooterbrise** ist eine iOS-App (SwiftUI + CoreBluetooth) für den
+**Segway-Ninebot F2 Pro** (und andere Ninebot-Scooter der F-Serie). Sie wird über
+GitHub Actions automatisch zu einer `.ipa`-Datei gebaut, ohne dass du selbst
+einen Mac oder Xcode brauchst.
 
-## Eenmalige setup
+## Einmalige Einrichtung
 
-1. **Maak een nieuwe GitHub-repository** (bv. `ninebot-app`), publiek of privé
-   maakt niet uit — privé werkt ook prima met GitHub Actions.
-2. **Upload deze hele map** naar die repository (via de GitHub-website: "Add
-   file" → "Upload files", sleep de hele inhoud van deze map erin — inclusief
-   de verborgen map `.github`), of via git:
+1. **Lege ein neues GitHub-Repository an** (z. B. `ninebot-app`), öffentlich
+   oder privat ist egal — privat funktioniert mit GitHub Actions genauso gut.
+2. **Lade den gesamten Ordner** in dieses Repository hoch (über die
+   GitHub-Website: „Add file“ → „Upload files“, den gesamten Inhalt dieses
+   Ordners hineinziehen — inklusive des versteckten Ordners `.github`), oder
+   per git:
    ```
    git init
-   git remote add origin https://github.com/<jouw-gebruikersnaam>/ninebot-app.git
+   git remote add origin https://github.com/<dein-benutzername>/ninebot-app.git
    git add .
    git commit -m "Initial commit"
    git push -u origin main
    ```
 
-## Elke keer dat je een build wil
+## Jedes Mal, wenn du einen Build willst
 
-1. Ga naar je repository op GitHub → tab **Actions**
-2. Kies de workflow **"Build unsigned IPA"** in de lijst links
-3. Klik **"Run workflow"** → **"Run workflow"** (groene knop)
-4. Wacht 3-5 minuten tot het groene vinkje verschijnt
-5. Klik op de voltooide run → onderaan bij **Artifacts** staat
-   `NinebotApp-unsigned-ipa` → download (dit is een zip met de `.ipa` erin)
-6. Pak de zip uit → je hebt nu `NinebotApp-unsigned.ipa`
+1. Gehe zu deinem Repository auf GitHub → Tab **Actions**
+2. Wähle links in der Liste den Workflow **„Build unsigned IPA“**
+3. Klicke **„Run workflow“** → **„Run workflow“** (grüner Knopf)
+4. Warte 3–5 Minuten, bis der grüne Haken erscheint
+5. Klicke auf den fertigen Lauf → unten bei **Artifacts** steht
+   `Scooterbrise-ipa` → herunterladen (eine ZIP-Datei mit der `.ipa`)
+6. ZIP entpacken → du hast jetzt `Scooterbrise.ipa`
 
-Dit gebeurt automatisch ook bij elke `git push` naar de `main`-branch, dus
-zodra je code aanpast en pusht, staat er een nieuwe build klaar.
+Das passiert auch automatisch bei jedem `git push` auf den `main`-Branch —
+sobald du Code änderst und pushst, steht ein neuer Build bereit.
 
-## Installeren op je iPhone (met Sideloadly)
+## Auf dem iPhone installieren (mit Sideloadly)
 
-1. Download en installeer **Sideloadly** (gratis, Windows en macOS):
-   https://sideloadly.io
-2. Sluit je iPhone aan met een kabel
-3. Open Sideloadly, sleep `NinebotApp-unsigned.ipa` in het venster
-4. Vul je **Apple ID** in (een gewoon, gratis account volstaat)
-5. Klik **Start** — Sideloadly ondertekent de app met jouw Apple ID en zet
-   hem op je iPhone
-6. Eerste keer op je iPhone: **Instellingen → Algemeen → VPN en
-   apparaatbeheer** → jouw Apple ID onder "Developer App" → **Vertrouw**
-7. De app staat nu als icoon op je beginscherm
+1. **Sideloadly** herunterladen und installieren (kostenlos, Windows und
+   macOS): https://sideloadly.io
+2. iPhone per Kabel anschließen
+3. Sideloadly öffnen, `Scooterbrise.ipa` ins Fenster ziehen
+4. Deine **Apple-ID** eingeben (ein normales, kostenloses Konto reicht)
+5. **Start** klicken — Sideloadly signiert die App mit deiner Apple-ID und
+   installiert sie auf dem iPhone
+6. Beim ersten Mal auf dem iPhone: **Einstellungen → Allgemein → VPN und
+   Geräteverwaltung** → deine Apple-ID unter „Entwickler-App“ → **Vertrauen**
+7. Die App liegt jetzt als Symbol auf deinem Home-Bildschirm
 
-**Let op:** met een gratis Apple ID verloopt de installatie na 7 dagen — dan
-herhaal je gewoon stap 3-6 met dezelfde `.ipa` (geen nieuwe build nodig,
-tenzij je de code hebt aangepast).
+**Hinweis:** Mit einer kostenlosen Apple-ID läuft die Installation nach 7
+Tagen ab — dann wiederholst du einfach Schritt 3–6 mit derselben `.ipa` (kein
+neuer Build nötig, außer du hast den Code geändert).
 
-## Wat zit er in de app
+## Was steckt in der App
 
-Een testscherm (`NinebotTestView`) met knoppen om te verbinden met je step,
-de auth-handshake te doorlopen, het snelheidsregister uit te lezen, en de
-sport-modus limiet te zetten. Vergeet niet `"JOUW-STEP-BLE-NAAM"` in
-`Sources/NinebotApp/NinebotTestView.swift` te vervangen door de echte
-BLE-naam van je step voor je een build maakt.
+**Tab „Scooter“**
+- Scooter suchen und koppeln (beim ersten Mal den **Startknopf** am Scooter
+  kurz drücken); danach **verbindet sich die App beim Einschalten von selbst**,
+  auch im Hintergrund.
+- **Live-Werte** alle 5 Sekunden (Akku, Reichweite, Spannung, Strom, Strecke,
+  Zeit, Kilometerstand, GPS-Tempo), **Fahrzeugdaten** inkl. Fehlercode mit
+  Erklärung.
+- **Einstellungen:** Tempolimit im Begrenzungsmodus (6–20 km/h),
+  Rekuperation, Tempomat, Rücklicht.
+- **Wetter** (optional, Open-Meteo) mit Hinweisen zu Glätte, Wind und Regen.
+- **Wartung** nach dem Original-Wartungsplan von Ninebot, mit Erinnerungen.
+- **Dokumente:** Versicherungsbestätigung, Betriebserlaubnis/Datenbestätigung,
+  Kaufbeleg — per Kamera-Scan, aus Fotos oder als PDF. **Face-ID-geschützt**,
+  verschlüsselt gespeichert, austauschbar mit Archiv, Erinnerung vor Ablauf
+  des Versicherungsjahres (Ende Februar), als PDF teilbar.
+- **Sperrbildschirm und Dynamic Island:** Tempo, Akku, Strecke, Fahrzeit.
+
+**Tab „Route“ — Navigation**
+- **Navigation in der App:** großer Richtungspfeil mit Entfernung, deutsche
+  Sprachansagen, Karte in Fahrtrichtung, Tempo/Akku/Reststrecke/Ankunft,
+  Neuberechnung beim Abweichen; Display bleibt an, Ansagen auch bei
+  gesperrtem iPhone.
+- **Reichweitenprüfung** der Route und **Reichweitenkreis** (hin und zurück /
+  nur hin) aus der Restreichweite des Scooters, mit Kälteabschlag.
+- **Favoriten** (Zuhause, Arbeit, eigene) und **Rückweg** zum Startpunkt.
+- Fahrradrouten ab iOS 26, sonst Fußwegroute als Näherung; alternativ
+  Übergabe an Apple Maps.
+
+**Tab „Fahrten“ — automatisches Fahrtenbuch**
+Datum, Abfahrt, Ankunft, Dauer, Strecke (Scooter und GPS), Ø-/Höchsttempo,
+Akku vorher/nachher, Verbrauch, Start-/Zieladresse, Wetter, Karte **nach
+Tempo eingefärbt**. Export als **GPX** und **CSV** (Excel).
+
+**Tab „Akku“** — Verlauf des Akkuzustands, Verbrauch pro Fahrt.
+
+**Tab „Hilfe“** — die **deutschen Seiten des Produkt-Handbuchs als PDF**,
+dazu Kurzfassungen: Bedienung und Fahrmodi, technische Daten F2 Pro, Laden
+und Reifendruck, Fehlercodes (durchsuchbar), Wartungsplan, Anleitung zur App.
+Alles offline verfügbar.
+
+Der Regler für das Tempolimit endet bewusst bei 20 km/h, dem gesetzlichen
+Maximum für E-Scooter in Deutschland (eKFV).
+
+### Datenschutz
+
+- Fahrten, Akku-Verlauf, Wartung, Dokumente und der gemerkte Scooter werden
+  **nur auf dem iPhone** gespeichert. Dokumente zusätzlich mit iOS-Dateischutz
+  (verschlüsselt, solange das iPhone gesperrt ist) und optional Face ID.
+- Keine Fremdbibliotheken, kein Konto, keine Werbung, keine Analyse.
+- Internetverbindungen: **Apple Karten** (Karten, Adressen, Zielsuche,
+  Routen) und — nur wenn eingeschaltet — **Open-Meteo** für das Wetter, mit
+  auf ca. 1 km gerundetem Standort.
+- Berechtigungen: Bluetooth, Standort („Immer“ für die Automatik),
+  Mitteilungen (Wartung, Versicherung), Kamera (Dokumente scannen), Face ID.
+
+### Grundlage und Stand
+
+Protokoll, Verschlüsselung und Register folgen den Open-Source-Projekten
+[ninebot-ble](https://github.com/ownbee/ninebot-ble) (entwickelt an einem
+Ninebot der F-Serie) und [miauth](https://github.com/dnandha/miauth).
+Die Verschlüsselung ist mit Testvektoren aus miauth geprüft und liefert
+Byte für Byte dasselbe Ergebnis. An einem echten F2 Pro getestet ist die App
+noch nicht. Das **Schreiben** der Einstellungen ist in der Referenz nicht
+enthalten (dort wird nur gelesen) — nach jeder Änderung liest die App den Wert
+zur Kontrolle erneut aus.
+
+Nur mit dem eigenen Fahrzeug verwenden.

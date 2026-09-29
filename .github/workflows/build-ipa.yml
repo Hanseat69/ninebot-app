@@ -3,11 +3,11 @@ name: Build unsigned IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Checkout
@@ -16,7 +16,7 @@ jobs:
       - name: Select latest available Xcode
         run: |
           LATEST_XCODE=$(ls /Applications | grep -E '^Xcode_[0-9]+\.[0-9]+(\.[0-9]+)?\.app$' | sort -V | tail -n1)
-          echo "Gevonden: $LATEST_XCODE"
+          echo "Gefunden: $LATEST_XCODE"
           sudo xcode-select -s "/Applications/$LATEST_XCODE/Contents/Developer"
           xcodebuild -version
 
@@ -28,12 +28,12 @@ jobs:
         run: |
           FOUND=$(find . -name project.yml -not -path '*/build/*' | head -n1)
           if [ -z "$FOUND" ]; then
-            echo "Kon project.yml nergens vinden in de repo!"
+            echo "project.yml wurde nirgends im Repo gefunden!"
             find . -maxdepth 4 -type f
             exit 1
           fi
           PROJECT_DIR=$(dirname "$FOUND")
-          echo "project.yml gevonden in: $PROJECT_DIR"
+          echo "project.yml gefunden in: $PROJECT_DIR"
           echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Generate Xcode project
@@ -59,11 +59,11 @@ jobs:
           cd "${{ steps.locate.outputs.project_dir }}"
           mkdir -p Payload
           cp -r "build/Build/Products/Release-iphoneos/NinebotApp.app" Payload/
-          zip -r NinebotApp-unsigned.ipa Payload
+          zip -r Scooterbrise.ipa Payload
 
       - name: Upload IPA as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NinebotApp-unsigned-ipa
-          path: ${{ steps.locate.outputs.project_dir }}/NinebotApp-unsigned.ipa
+          name: Scooterbrise-ipa
+          path: ${{ steps.locate.outputs.project_dir }}/Scooterbrise.ipa
           retention-days: 14

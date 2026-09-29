@@ -1,8 +1,19 @@
 name: NinebotApp
 options:
   bundleIdPrefix: com.antoine.ninebot
+  developmentLanguage: de
   deploymentTarget:
     iOS: "16.0"
+
+settingGroups:
+  unsigned:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGN_IDENTITY: ""
+    DEVELOPMENT_TEAM: ""
 
 targets:
   NinebotApp:
@@ -10,24 +21,55 @@ targets:
     platform: iOS
     sources:
       - Sources/NinebotApp
+      - Sources/Shared
+    dependencies:
+      - target: NinebotWidget
     info:
       path: Sources/NinebotApp/Info.plist
       properties:
-        CFBundleDisplayName: NinebotApp
-        NSBluetoothAlwaysUsageDescription: "Nodig om via Bluetooth met je step te verbinden"
+        CFBundleDisplayName: Scooterbrise
+        CFBundleDevelopmentRegion: de
+        CFBundleLocalizations: [de]
+        NSBluetoothAlwaysUsageDescription: "Wird benötigt, um per Bluetooth mit deinem Scooter zu verbinden"
+        NSLocationWhenInUseUsageDescription: "Für das Fahrtenbuch: zeichnet die Strecke deiner Fahrten auf. Die Daten bleiben auf deinem iPhone."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Damit Fahrten auch automatisch aufgezeichnet werden, wenn die App im Hintergrund ist. Die Daten bleiben auf deinem iPhone."
+        NSSupportsLiveActivities: true
+        NSFaceIDUsageDescription: "Schützt deine Scooter-Dokumente (Versicherung, Betriebserlaubnis) vor fremden Blicken."
+        NSCameraUsageDescription: "Zum Einscannen von Dokumenten wie der Versicherungsbestätigung."
+
+        UIBackgroundModes:
+          - bluetooth-central
+          - location
+          - audio
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
     settings:
+      groups: [unsigned]
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.antoine.ninebotapp
-        SWIFT_VERSION: "5.0"
-        TARGETED_DEVICE_FAMILY: "1"
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGN_IDENTITY: ""
-        DEVELOPMENT_TEAM: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  # Anzeige auf Sperrbildschirm und in der Dynamic Island (Live Activity)
+  NinebotWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.1"
+    sources:
+      - Sources/NinebotWidget
+      - Sources/Shared
+    info:
+      path: Sources/NinebotWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Scooterbrise
+        CFBundleDevelopmentRegion: de
+        CFBundleLocalizations: [de]
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      groups: [unsigned]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.antoine.ninebotapp.widget
 
 schemes:
   NinebotApp:
