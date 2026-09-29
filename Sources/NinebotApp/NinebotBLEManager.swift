@@ -1,18 +1,18 @@
 //
 //  NinebotBLEManager.swift
-//  Basis CoreBluetooth-connector voor Segway-Ninebot steps (o.a. E2 Pro)
+//  Grundlegender CoreBluetooth-Connector für Segway-Ninebot-Scooter (u. a. E2 Pro)
 //
-//  BELANGRIJK:
-//  - Dit regelt scannen, verbinden en het ontdekken van de UART service/characteristics.
-//  - Nieuwere Ninebot-modellen (incl. E2 Pro) gebruiken een versleuteld protocol
-//    ("miauth"). Zonder die encryptielaag krijg je GEEN leesbare telemetrie terug,
-//    enkel een ruwe (versleutelde) bytestream. Zie community-referenties onderaan.
-//  - Voeg in je Xcode project aan Info.plist toe:
+//  WICHTIG:
+//  - Dies übernimmt Scannen, Verbinden und das Erkennen des UART-Service und der Characteristics.
+//  - Neuere Ninebot-Modelle (inkl. E2 Pro) nutzen ein verschlüsseltes Protokoll
+//    ("miauth"). Ohne diese Verschlüsselungsschicht bekommst du KEINE lesbare Telemetrie,
+//    nur einen rohen (verschlüsselten) Bytestrom. Siehe Community-Referenzen unten.
+//  - Im Xcode-Projekt in der Info.plist ergänzen:
 //      NSBluetoothAlwaysUsageDescription
-//      (tekst, bv. "Nodig om met je step te verbinden via Bluetooth")
+//      (Text, z. B. "Wird benötigt, um per Bluetooth mit deinem Scooter zu verbinden")
 //
-//  Referenties voor het protocol (community reverse-engineering, geen officiële Segway-bron):
-//  - https://github.com/ownbee/ninebot-ble   (Python client incl. miauth crypto)
+//  Referenzen zum Protokoll (Community-Reverse-Engineering, keine offizielle Segway-Quelle):
+//  - https://github.com/ownbee/ninebot-ble   (Python-Client inkl. miauth-Krypto)
 //  - https://codeberg.org/NootNooot/segway-ninebot-ble-cli
 //  - https://github.com/CamiAlfa/M365-BLE-PROTOCOL
 //
@@ -21,11 +21,11 @@ import Foundation
 import CoreBluetooth
 
 // MARK: - Ninebot UART Service/Characteristic UUIDs
-// Deze UUID's komen uit community reverse-engineering van de Ninebot BLE UART service.
+// Diese UUIDs stammen aus Community-Reverse-Engineering des Ninebot-BLE-UART-Service.
 enum NinebotBLE {
     static let uartServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-    static let writeCharUUID   = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // phone -> scooter
-    static let notifyCharUUID  = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // scooter -> phone
+    static let writeCharUUID   = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Telefon -> Scooter
+    static let notifyCharUUID  = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // Scooter -> Telefon
 }
 
 protocol NinebotBLEManagerDelegate: AnyObject {
@@ -45,13 +45,13 @@ final class NinebotBLEManager: NSObject {
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
 
-    /// Zet op true om alle BLE-toestellen te tonen ipv enkel toestellen met de Ninebot UART service.
-    /// Handig bij eerste keer troubleshooten (sommige firmwares adverteren de service niet altijd).
+    /// Auf true setzen, um alle BLE-Geräte statt nur Geräte mit dem Ninebot-UART-Service anzuzeigen.
+    /// Praktisch bei der ersten Fehlersuche (manche Firmwares bewerben den Service nicht immer).
     var scanForAllDevices = false
 
-    /// Vuurt zodra zowel de write- als notify-characteristic effectief gevonden zijn —
-    /// pas dan heeft sendRaw() zin. Gebruik dit i.p.v. te gokken met een vaste delay
-    /// na didConnect (discovery is async en de duur ervan is niet gegarandeerd).
+    /// Wird ausgelöst, sobald sowohl die Write- als auch die Notify-Characteristic gefunden sind —
+    /// erst dann ist sendRaw() sinnvoll. Nutze dies, statt nach didConnect mit einer festen
+    /// Verzögerung zu raten (Discovery ist asynchron, ihre Dauer ist nicht garantiert).
     var onCharacteristicsReady: (() -> Void)?
 
     override init() {
@@ -59,11 +59,11 @@ final class NinebotBLEManager: NSObject {
         centralManager = CBCentralManager(delegate: self, queue: nil)
     }
 
-    // MARK: - Public API
+    // MARK: - Öffentliche API
 
     func startScanning() {
         guard centralManager.state == .poweredOn else {
-            print("Bluetooth is niet aan of niet beschikbaar (state: \(centralManager.state.rawValue))")
+            print("Bluetooth ist nicht an oder nicht verfügbar (State: \(centralManager.state.rawValue))")
             return
         }
         let services = scanForAllDevices ? nil : [NinebotBLE.uartServiceUUID]
@@ -88,12 +88,12 @@ final class NinebotBLEManager: NSObject {
         centralManager.cancelPeripheralConnection(peripheral)
     }
 
-    /// Stuur ruwe bytes naar de step. Voor echte commando's moet dit een correct
-    /// opgebouwd Ninebot-protocolframe zijn (headers, checksum, evt. encryptie).
+    /// Sendet rohe Bytes an den Scooter. Für echte Befehle muss dies ein korrekt
+    /// aufgebauter Ninebot-Protokollframe sein (Header, Prüfsumme, ggf. Verschlüsselung).
     func sendRaw(_ data: Data) {
         guard let peripheral = scooterPeripheral,
               let characteristic = writeCharacteristic else {
-            print("Nog niet verbonden of write characteristic niet gevonden")
+            print("Noch nicht verbunden oder Write-Characteristic nicht gefunden")
             return
         }
         let type: CBCharacteristicWriteType = characteristic.properties.contains(.writeWithoutResponse)
@@ -109,11 +109,11 @@ extension NinebotBLEManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn:
-            print("Bluetooth staat aan")
+            print("Bluetooth ist an")
         case .poweredOff:
-            print("Bluetooth staat uit — zet het aan in Instellingen")
+            print("Bluetooth ist aus — bitte in den Einstellungen einschalten")
         case .unauthorized:
-            print("App heeft geen Bluetooth-toestemming")
+            print("App hat keine Bluetooth-Berechtigung")
         default:
             print("Bluetooth state: \(central.state.rawValue)")
         }
@@ -197,8 +197,8 @@ extension NinebotBLEManager: CBPeripheralDelegate {
         }
         guard characteristic.uuid == NinebotBLE.notifyCharUUID,
               let data = characteristic.value else { return }
-        // Ruwe (mogelijk versleutelde) bytes van de step — decoding/decryptie is
-        // hier nog niet geïmplementeerd, zie opmerking bovenaan het bestand.
+        // Rohe (evtl. verschlüsselte) Bytes vom Scooter — Dekodierung/Entschlüsselung ist
+        // hier noch nicht implementiert, siehe Hinweis oben in der Datei.
         delegate?.ninebotManager(self, didReceiveRawData: data)
     }
 

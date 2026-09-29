@@ -14,7 +14,7 @@ targets:
       path: Sources/NinebotApp/Info.plist
       properties:
         CFBundleDisplayName: NinebotApp
-        NSBluetoothAlwaysUsageDescription: "Nodig om via Bluetooth met je step te verbinden"
+        NSBluetoothAlwaysUsageDescription: "Wird benötigt, um per Bluetooth mit deinem Scooter zu verbinden"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

@@ -1,24 +1,24 @@
 //
 //  NinebotSession.swift
-//  Orkestreert de 3-fase auth-handshake (PRE_COMM → SET_PWD → AUTH) en biedt
-//  daarna encrypted read/write van registers, incl. de sport-modus snelheidslimiet.
+//  Steuert den dreiphasigen Auth-Handshake (PRE_COMM → SET_PWD → AUTH) und bietet
+//  danach verschlüsseltes Lesen/Schreiben von Registern, inkl. Sport-Modus-Geschwindigkeitslimit.
 //
-//  Gebruik:
+//  Verwendung:
 //    let session = NinebotSession(bleManager: myNinebotBLEManager, deviceName: "MIScooterXXXX")
-//    session.onStateChange = { state in ... }   // toon UI-feedback ("druk op de knop", etc.)
+//    session.onStateChange = { state in ... }   // UI-Feedback anzeigen ("Knopf drücken" usw.)
 //    session.pair()
-//    // eenmaal .authenticated:
+//    // sobald .authenticated:
 //    session.setSportModeSpeedLimit(kmh: 25) { result in ... }
 //
-//  LET OP — lees dit voor je test:
-//  - Bij de EERSTE koppeling moet je (net als bij de officiële app) binnen ~5-60s
-//    een fysieke knop op de step indrukken (SET_PWD-fase, zie onState .waitingForButtonPress).
-//  - Deze implementatie volgt de gepubliceerde protocolspecificatie 1-op-1, maar is
-//    NIET getest tegen een echte E2 Pro. Test eerst met een LEES-commando (bv. huidige
-//    snelheidslimiet uitlezen) voor je een schrijfcommando stuurt.
-//  - Enkel gebruiken met je eigen voertuig — de handshake vereist toch de fysieke
-//    knop op de step, dus dit werkt sowieso niet op andermans step zonder toegang
-//    tot het toestel zelf.
+//  ACHTUNG — vor dem Testen lesen:
+//  - Bei der ERSTEN Kopplung musst du (wie bei der offiziellen App) innerhalb von ~5-60 s
+//    einen physischen Knopf am Scooter drücken (SET_PWD-Phase, siehe State .waitingForButtonPress).
+//  - Diese Implementierung folgt der veröffentlichten Protokollspezifikation 1:1, ist aber
+//    NICHT an einem echten E2 Pro getestet. Teste zuerst mit einem LESE-Befehl (z. B. aktuelles
+//    Geschwindigkeitslimit auslesen), bevor du einen Schreibbefehl sendest.
+//  - Nur mit dem eigenen Fahrzeug verwenden — der Handshake erfordert ohnehin den physischen
+//    Knopf am Scooter, funktioniert also ohne Zugang zum Gerät selbst nicht an
+//    fremden Scootern.
 //
 
 import Foundation
@@ -40,7 +40,7 @@ final class NinebotSession {
 
     private let bleManager: NinebotBLEManager
     private let deviceName: String
-    private let boardTarget: UInt8 = 0x04   // BLE board, zoals gedocumenteerd
+    private let boardTarget: UInt8 = 0x04   // BLE-Board, wie dokumentiert
 
     private var key1: [UInt8] = []
     private var key2: [UInt8]? = nil
@@ -68,7 +68,7 @@ final class NinebotSession {
         }
     }
 
-    // MARK: - Publieke flow
+    // MARK: - Öffentlicher Ablauf
 
     func pair() {
         counter = 0
@@ -77,9 +77,9 @@ final class NinebotSession {
         bleManager.startScanning()
     }
 
-    /// Leest een register (zonder wijziging) — gebruik dit eerst om te verifiëren
-    /// dat de handshake werkt en welk register overeenkomt met de snelheidslimiet.
-    /// cmd = READ (0x01), index = registeradres, data = [aantal te lezen bytes]
+    /// Liest ein Register (ohne Änderung) — nutze das zuerst, um zu prüfen,
+    /// ob der Handshake funktioniert und welches Register dem Geschwindigkeitslimit entspricht.
+    /// cmd = READ (0x01), index = Registeradresse, data = [Anzahl zu lesender Bytes]
     func readRegister(_ register: UInt8, byteCount: UInt8 = 2, completion: @escaping (Result<[UInt8], Error>) -> Void) {
         guard state == .authenticated else {
             completion(.failure(NinebotSessionError.notAuthenticated))
@@ -88,7 +88,7 @@ final class NinebotSession {
         sendEncryptedCommand(cmd: 0x01, index: register, data: [byteCount], completion: completion)
     }
 
-    /// cmd = WRITE-met-bevestiging (0x02), index = registeradres, data = nieuwe waarde (little-endian)
+    /// cmd = WRITE-mit-Bestätigung (0x02), index = Registeradresse, data = neuer Wert (Little-Endian)
     func writeRegister(_ register: UInt8, data: [UInt8], completion: @escaping (Result<[UInt8], Error>) -> Void) {
         guard state == .authenticated else {
             completion(.failure(NinebotSessionError.notAuthenticated))
@@ -97,11 +97,11 @@ final class NinebotSession {
         sendEncryptedCommand(cmd: 0x02, index: register, data: data, completion: completion)
     }
 
-    /// Zet de snelheidslimiet van sport-modus.
-    /// - Parameter kmh: gewenste limiet in km/u
-    /// - Important: verifieer eerst via readRegister welk register/eenheid je toestel
-    ///   effectief gebruikt — 0x74 in m/u is gebaseerd op het oudere Ninebot One-protocol
-    ///   en is NIET expliciet bevestigd voor de E2 Pro's Encryption2-protocol.
+    /// Setzt das Geschwindigkeitslimit des Sport-Modus.
+    /// - Parameter kmh: gewünschtes Limit in km/h
+    /// - Important: prüfe zuerst per readRegister, welches Register/welche Einheit dein Gerät
+    ///   tatsächlich verwendet — 0x74 in m/h basiert auf dem älteren Ninebot-One-Protokoll
+    ///   und ist für das Encryption2-Protokoll des E2 Pro NICHT ausdrücklich bestätigt.
     func setSportModeSpeedLimit(kmh: Double, completion: @escaping (Result<Void, Error>) -> Void) {
         let mPerHour = UInt16(kmh * 1000)
         let data: [UInt8] = [UInt8(mPerHour & 0xFF), UInt8((mPerHour >> 8) & 0xFF)]
@@ -113,12 +113,12 @@ final class NinebotSession {
         }
     }
 
-    // MARK: - Frame bouwen/versturen
+    // MARK: - Frame bauen/senden
 
     private func buildPlaintextFrame(cmd: UInt8, index: UInt8, data: [UInt8]) -> [UInt8] {
         var frame: [UInt8] = [0x5A, 0xA5, UInt8(data.count & 0xFF)]
-        frame.append(0x3E)          // source = telefoon
-        frame.append(boardTarget)   // target = BLE board
+        frame.append(0x3E)          // source = Telefon
+        frame.append(boardTarget)   // target = BLE-Board
         frame.append(cmd)
         frame.append(index)
         frame.append(contentsOf: data)
@@ -144,7 +144,7 @@ final class NinebotSession {
         bleManager.sendRaw(Data(frame))
     }
 
-    // MARK: - Handshake fasen
+    // MARK: - Handshake-Phasen
 
     private func startPreComm() {
         state = .preComm
@@ -164,13 +164,13 @@ final class NinebotSession {
 
     private func handlePreCommResponse(_ result: Result<[UInt8], Error>) {
         guard case .success(let plaintext) = result, plaintext.count >= 7 + 30 else {
-            state = .failed("PRE_COMM: ongeldig antwoord")
+            state = .failed("PRE_COMM: ungültige Antwort")
             return
         }
         let data = Array(plaintext.dropFirst(7))
         authParam = Array(data.prefix(16))
         serialNumber = Array(data[16..<30])
-        counter = 1   // SN mode vanaf nu, counter start op 1 (eerste encrypt -> 2)
+        counter = 1   // ab jetzt SN-Modus, Counter startet bei 1 (erstes Encrypt -> 2)
         startSetPassword()
     }
 
@@ -199,7 +199,7 @@ final class NinebotSession {
         buttonPressRetryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
             guard let self = self else { timer.invalidate(); return }
             guard self.state == .waitingForButtonPress else { timer.invalidate(); return }
-            // her-verstuur SET_PWD met hetzelfde wachtwoord tot bevestigd of timeout
+            // SET_PWD mit demselben Passwort erneut senden, bis bestätigt oder Timeout
             let plaintext = self.buildPlaintextFrame(cmd: 0x5C, index: 0x00, data: self.sessionPassword)
             let key = NinebotCrypto.deriveKey(key1: self.key1, key2: self.key2)
             self.counter += 1
@@ -210,7 +210,7 @@ final class NinebotSession {
 
     private func handleSetPasswordResponse(_ result: Result<[UInt8], Error>) {
         guard case .success(let plaintext) = result, plaintext.count >= 7 else {
-            state = .failed("SET_PWD: ongeldig antwoord")
+            state = .failed("SET_PWD: ungültige Antwort")
             return
         }
         let index = plaintext[6]
@@ -218,7 +218,7 @@ final class NinebotSession {
             buttonPressRetryTimer?.invalidate()
             startAuth()
         }
-        // index == 0: nog wachten op knopdruk, retry-timer doet zijn werk
+        // index == 0: noch auf Knopfdruck warten, der Retry-Timer erledigt den Rest
     }
 
     private func startAuth() {
@@ -239,18 +239,18 @@ final class NinebotSession {
 
     private func handleAuthResponse(_ result: Result<[UInt8], Error>) {
         guard case .success(let plaintext) = result, plaintext.count >= 7 else {
-            state = .failed("AUTH: ongeldig antwoord")
+            state = .failed("AUTH: ungültige Antwort")
             return
         }
         let index = plaintext[6]
         if index == 1 {
             state = .authenticated
         } else {
-            state = .failed("AUTH: geweigerd door voertuig")
+            state = .failed("AUTH: vom Fahrzeug abgelehnt")
         }
     }
 
-    // MARK: - Wachtwoordgeneratie (Java LCG + SHA-256, zie authentication docs)
+    // MARK: - Passwortgenerierung (Java-LCG + SHA-256, siehe Authentifizierungs-Doku)
 
     private func generateSessionPassword(authParam: [UInt8]) -> [UInt8] {
         let timeMs = Int64(Date().timeIntervalSince1970 * 1000)
@@ -277,7 +277,7 @@ enum NinebotSessionError: Error {
     case timeout
 }
 
-// MARK: - CoreBluetooth koppeling
+// MARK: - CoreBluetooth-Anbindung
 
 extension NinebotSession: NinebotBLEManagerDelegate {
 
@@ -287,14 +287,14 @@ extension NinebotSession: NinebotBLEManagerDelegate {
     }
 
     func ninebotManager(_ manager: NinebotBLEManager, didConnect peripheral: CBPeripheral) {
-        // Handshake start pas via onCharacteristicsReady (zie init), zodra write-
-        // en notify-characteristic effectief gevonden zijn — niet hier al.
+        // Der Handshake startet erst über onCharacteristicsReady (siehe init), sobald Write-
+        // und Notify-Characteristic tatsächlich gefunden sind — nicht schon hier.
     }
 
     func ninebotManager(_ manager: NinebotBLEManager, didDisconnect peripheral: CBPeripheral, error: Error?) {
         buttonPressRetryTimer?.invalidate()
         if state != .authenticated {
-            state = .failed("Verbinding verbroken tijdens handshake")
+            state = .failed("Verbindung während des Handshakes getrennt")
         } else {
             state = .idle
         }
@@ -328,7 +328,7 @@ extension NinebotSession: NinebotBLEManagerDelegate {
     }
 }
 
-// MARK: - SHA-256 helper (CryptoKit wrapper, voor leesbaarheid hierboven)
+// MARK: - SHA-256-Helfer (CryptoKit-Wrapper, für bessere Lesbarkeit oben)
 
 enum SHA256Helper {
     static func hash(_ data: Data) -> [UInt8] {

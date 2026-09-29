@@ -1,9 +1,9 @@
 //
 //  JavaRandom.swift
-//  Herimplementatie van java.util.Random (48-bit Linear Congruential Generator).
-//  Nodig omdat de Segway/Ninebot Android-app dit gebruikt om het sessiewachtwoord
-//  te genereren tijdens SET_PWD — voor interoperabiliteit moet de iOS-kant exact
-//  hetzelfde algoritme volgen.
+//  Nachimplementierung von java.util.Random (48-Bit Linear Congruential Generator).
+//  Nötig, weil die Segway/Ninebot-Android-App damit während SET_PWD das Sitzungspasswort
+//  erzeugt — für die Interoperabilität muss die iOS-Seite exakt
+//  denselben Algorithmus verwenden.
 //
 
 import Foundation
@@ -24,7 +24,7 @@ struct JavaRandom {
         return Int32(truncatingIfNeeded: shifted)
     }
 
-    /// Komt overeen met java.util.Random#nextBytes(byte[])
+    /// Entspricht java.util.Random#nextBytes(byte[])
     mutating func nextBytes(count: Int) -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: count)
         var i = 0
@@ -33,7 +33,7 @@ struct JavaRandom {
             var n = min(count - i, 4)
             while n > 0 {
                 bytes[i] = UInt8(truncatingIfNeeded: rnd)
-                rnd = rnd >> 8   // arithmetic shift, zoals Java's rnd >>= 8 op een int
+                rnd = rnd >> 8   // arithmetischer Shift, wie Javas rnd >>= 8 auf einem int
                 i += 1
                 n -= 1
             }

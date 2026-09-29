@@ -1,7 +1,7 @@
 //
 //  NinebotTestView.swift
-//  Minimaal testscherm om de handshake en snelheidsregister te proberen.
-//  Vervang "E2 Pro 0923" door de naam die je step adverteert.
+//  Minimaler Testbildschirm, um den Handshake und das Geschwindigkeitsregister auszuprobieren.
+//  Ersetze "E2 Pro 0923" durch den Namen, den dein Scooter per Bluetooth anzeigt.
 //
 
 import SwiftUI
@@ -19,22 +19,22 @@ struct NinebotTestView: View {
             }
             .disabled(viewModel.isBusy)
 
-            Button("Lees snelheidsregister") {
+            Button("Geschwindigkeitsregister lesen") {
                 viewModel.readSpeedRegister()
             }
             .disabled(!viewModel.isAuthenticated)
 
             if let lastRead = viewModel.lastReadValue {
-                Text("Gelezen waarde: \(lastRead)")
+                Text("Gelesener Wert: \(lastRead)")
             }
 
             HStack {
-                Text("Nieuwe limiet: \(Int(viewModel.speedLimit)) km/u")
+                Text("Neues Limit: \(Int(viewModel.speedLimit)) km/h")
                 Slider(value: $viewModel.speedLimit, in: 5...25, step: 1)
             }
             .padding(.horizontal)
 
-            Button("Zet sport-modus limiet") {
+            Button("Sport-Modus-Limit setzen") {
                 viewModel.applySpeedLimit()
             }
             .disabled(!viewModel.isAuthenticated)
@@ -44,7 +44,7 @@ struct NinebotTestView: View {
 }
 
 final class NinebotTestViewModel: ObservableObject {
-    @Published var statusText: String = "Niet verbonden"
+    @Published var statusText: String = "Nicht verbunden"
     @Published var isBusy: Bool = false
     @Published var isAuthenticated: Bool = false
     @Published var lastReadValue: String?
@@ -55,25 +55,25 @@ final class NinebotTestViewModel: ObservableObject {
 
     func pair() {
         isBusy = true
-        statusText = "Verbinden..."
+        statusText = "Verbinde..."
 
         let session = NinebotSession(bleManager: bleManager, deviceName: "E2 Pro 0923")
         session.onStateChange = { [weak self] state in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 switch state {
-                case .idle: self.statusText = "Niet verbonden"
-                case .connecting: self.statusText = "Verbinden..."
+                case .idle: self.statusText = "Nicht verbunden"
+                case .connecting: self.statusText = "Verbinde..."
                 case .preComm: self.statusText = "Handshake: PRE_COMM..."
-                case .settingPassword: self.statusText = "Handshake: wachtwoord instellen..."
-                case .waitingForButtonPress: self.statusText = "Druk nu op de knop van de step!"
-                case .authenticating: self.statusText = "Handshake: authenticeren..."
+                case .settingPassword: self.statusText = "Handshake: Passwort festlegen..."
+                case .waitingForButtonPress: self.statusText = "Jetzt den Knopf am Scooter drücken!"
+                case .authenticating: self.statusText = "Handshake: Authentifizierung..."
                 case .authenticated:
-                    self.statusText = "Verbonden en geauthenticeerd"
+                    self.statusText = "Verbunden und authentifiziert"
                     self.isAuthenticated = true
                     self.isBusy = false
                 case .failed(let reason):
-                    self.statusText = "Mislukt: \(reason)"
+                    self.statusText = "Fehlgeschlagen: \(reason)"
                     self.isBusy = false
                 }
             }
@@ -89,7 +89,7 @@ final class NinebotTestViewModel: ObservableObject {
                 case .success(let bytes):
                     self?.lastReadValue = bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
                 case .failure(let error):
-                    self?.lastReadValue = "Fout: \(error)"
+                    self?.lastReadValue = "Fehler: \(error)"
                 }
             }
         }
@@ -100,9 +100,9 @@ final class NinebotTestViewModel: ObservableObject {
             DispatchQueue.main.async {
                 switch result {
                 case .success:
-                    self?.statusText = "Snelheidslimiet verstuurd"
+                    self?.statusText = "Geschwindigkeitslimit gesendet"
                 case .failure(let error):
-                    self?.statusText = "Fout bij versturen: \(error)"
+                    self?.statusText = "Fehler beim Senden: \(error)"
                 }
             }
         }

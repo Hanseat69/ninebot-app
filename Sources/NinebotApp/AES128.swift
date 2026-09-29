@@ -1,21 +1,21 @@
 //
 //  AES128.swift
-//  Minimale, pure-Swift AES-128 implementatie (enkel encryptie, ECB single-block).
-//  Nodig omdat het Ninebot-protocol AES-128-ECB als bouwsteen gebruikt voor een
-//  eigen CTR/CBC-MAC constructie (zie NinebotCrypto.swift) — geen standaard
-//  AES-CTR of AES-GCM, dus CryptoKit's hogere-niveau APIs volstaan niet.
+//  Minimale AES-128-Implementierung in reinem Swift (nur Verschlüsselung, ECB, ein Block).
+//  Nötig, weil das Ninebot-Protokoll AES-128-ECB als Baustein für eine eigene
+//  CTR/CBC-MAC-Konstruktion verwendet (siehe NinebotCrypto.swift) — kein Standard-
+//  AES-CTR oder AES-GCM, daher reichen die höheren APIs von CryptoKit nicht aus.
 //
-//  Standaard AES S-box en key schedule, geen geheime/eigen crypto.
+//  Standard-AES-S-Box und -Key-Schedule, keine geheime/eigene Kryptografie.
 //
 
 import Foundation
 
 enum AES128 {
 
-    /// Versleutelt exact 1 blok (16 bytes) met AES-128-ECB (geen padding, geen mode).
+    /// Verschlüsselt genau 1 Block (16 Bytes) mit AES-128-ECB (kein Padding, kein Modus).
     static func encryptBlock(key: [UInt8], block: [UInt8]) -> [UInt8] {
-        precondition(key.count == 16, "AES-128 key moet 16 bytes zijn")
-        precondition(block.count == 16, "AES blok moet 16 bytes zijn")
+        precondition(key.count == 16, "AES-128-Schlüssel muss 16 Bytes lang sein")
+        precondition(block.count == 16, "AES-Block muss 16 Bytes lang sein")
 
         let roundKeys = keyExpansion(key: key)
         var state = block
@@ -82,7 +82,7 @@ enum AES128 {
         return roundKeys
     }
 
-    // MARK: - Round transforms (state as 16-byte array, column-major)
+    // MARK: - Rundentransformationen (State als 16-Byte-Array, spaltenweise)
 
     private static func addRoundKey(_ state: inout [UInt8], _ roundKey: [UInt8]) {
         for i in 0..<16 { state[i] ^= roundKey[i] }
@@ -94,7 +94,7 @@ enum AES128 {
 
     private static func shiftRows(_ state: inout [UInt8]) {
         var s = state
-        // row r (0...3), shift left by r, column-major layout: state[col*4+row]
+        // Zeile r (0...3), um r nach links schieben, spaltenweises Layout: state[col*4+row]
         for r in 1..<4 {
             var row = [UInt8](repeating: 0, count: 4)
             for c in 0..<4 { row[c] = state[((c + r) % 4)*4 + r] }

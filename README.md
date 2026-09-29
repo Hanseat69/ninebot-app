@@ -1,58 +1,62 @@
-# NinebotApp — bouwen zonder Mac
+# NinebotApp — bauen ohne Mac
 
-Deze repo bevat een iOS-app (SwiftUI + CoreBluetooth) die via GitHub Actions
-automatisch gebouwd wordt tot een `.ipa`-bestand, zonder dat je zelf een Mac
-of Xcode nodig hebt.
+Dieses Repo enthält eine iOS-App (SwiftUI + CoreBluetooth), die über GitHub
+Actions automatisch zu einer `.ipa`-Datei gebaut wird, ohne dass du selbst
+einen Mac oder Xcode brauchst.
 
-## Eenmalige setup
+## Einmalige Einrichtung
 
-1. **Maak een nieuwe GitHub-repository** (bv. `ninebot-app`), publiek of privé
-   maakt niet uit — privé werkt ook prima met GitHub Actions.
-2. **Upload deze hele map** naar die repository (via de GitHub-website: "Add
-   file" → "Upload files", sleep de hele inhoud van deze map erin — inclusief
-   de verborgen map `.github`), of via git:
+1. **Lege ein neues GitHub-Repository an** (z. B. `ninebot-app`), öffentlich
+   oder privat ist egal — privat funktioniert mit GitHub Actions genauso gut.
+2. **Lade den gesamten Ordner** in dieses Repository hoch (über die
+   GitHub-Website: „Add file“ → „Upload files“, den gesamten Inhalt dieses
+   Ordners hineinziehen — inklusive des versteckten Ordners `.github`), oder
+   per git:
    ```
    git init
-   git remote add origin https://github.com/<jouw-gebruikersnaam>/ninebot-app.git
+   git remote add origin https://github.com/<dein-benutzername>/ninebot-app.git
    git add .
    git commit -m "Initial commit"
    git push -u origin main
    ```
 
-## Elke keer dat je een build wil
+## Jedes Mal, wenn du einen Build willst
 
-1. Ga naar je repository op GitHub → tab **Actions**
-2. Kies de workflow **"Build unsigned IPA"** in de lijst links
-3. Klik **"Run workflow"** → **"Run workflow"** (groene knop)
-4. Wacht 3-5 minuten tot het groene vinkje verschijnt
-5. Klik op de voltooide run → onderaan bij **Artifacts** staat
-   `NinebotApp-unsigned-ipa` → download (dit is een zip met de `.ipa` erin)
-6. Pak de zip uit → je hebt nu `NinebotApp-unsigned.ipa`
+1. Gehe zu deinem Repository auf GitHub → Tab **Actions**
+2. Wähle links in der Liste den Workflow **„Build unsigned IPA“**
+3. Klicke **„Run workflow“** → **„Run workflow“** (grüner Knopf)
+4. Warte 3–5 Minuten, bis der grüne Haken erscheint
+5. Klicke auf den fertigen Lauf → unten bei **Artifacts** steht
+   `NinebotApp-unsigned-ipa` → herunterladen (eine ZIP-Datei mit der `.ipa`)
+6. ZIP entpacken → du hast jetzt `NinebotApp-unsigned.ipa`
 
-Dit gebeurt automatisch ook bij elke `git push` naar de `main`-branch, dus
-zodra je code aanpast en pusht, staat er een nieuwe build klaar.
+Das passiert auch automatisch bei jedem `git push` auf den `main`-Branch —
+sobald du Code änderst und pushst, steht ein neuer Build bereit.
 
-## Installeren op je iPhone (met Sideloadly)
+## Auf dem iPhone installieren (mit Sideloadly)
 
-1. Download en installeer **Sideloadly** (gratis, Windows en macOS):
-   https://sideloadly.io
-2. Sluit je iPhone aan met een kabel
-3. Open Sideloadly, sleep `NinebotApp-unsigned.ipa` in het venster
-4. Vul je **Apple ID** in (een gewoon, gratis account volstaat)
-5. Klik **Start** — Sideloadly ondertekent de app met jouw Apple ID en zet
-   hem op je iPhone
-6. Eerste keer op je iPhone: **Instellingen → Algemeen → VPN en
-   apparaatbeheer** → jouw Apple ID onder "Developer App" → **Vertrouw**
-7. De app staat nu als icoon op je beginscherm
+1. **Sideloadly** herunterladen und installieren (kostenlos, Windows und
+   macOS): https://sideloadly.io
+2. iPhone per Kabel anschließen
+3. Sideloadly öffnen, `NinebotApp-unsigned.ipa` ins Fenster ziehen
+4. Deine **Apple-ID** eingeben (ein normales, kostenloses Konto reicht)
+5. **Start** klicken — Sideloadly signiert die App mit deiner Apple-ID und
+   installiert sie auf dem iPhone
+6. Beim ersten Mal auf dem iPhone: **Einstellungen → Allgemein → VPN und
+   Geräteverwaltung** → deine Apple-ID unter „Entwickler-App“ → **Vertrauen**
+7. Die App liegt jetzt als Symbol auf deinem Home-Bildschirm
 
-**Let op:** met een gratis Apple ID verloopt de installatie na 7 dagen — dan
-herhaal je gewoon stap 3-6 met dezelfde `.ipa` (geen nieuwe build nodig,
-tenzij je de code hebt aangepast).
+**Hinweis:** Mit einer kostenlosen Apple-ID läuft die Installation nach 7
+Tagen ab — dann wiederholst du einfach Schritt 3–6 mit derselben `.ipa` (kein
+neuer Build nötig, außer du hast den Code geändert).
 
-## Wat zit er in de app
+## Was steckt in der App
 
-Een testscherm (`NinebotTestView`) met knoppen om te verbinden met je step,
-de auth-handshake te doorlopen, het snelheidsregister uit te lezen, en de
-sport-modus limiet te zetten. Vergeet niet `"JOUW-STEP-BLE-NAAM"` in
-`Sources/NinebotApp/NinebotTestView.swift` te vervangen door de echte
-BLE-naam van je step voor je een build maakt.
+Ein Testbildschirm (`NinebotTestView`) mit Knöpfen, um dich mit deinem
+Scooter zu verbinden, den Auth-Handshake zu durchlaufen, das
+Geschwindigkeitsregister auszulesen und das Sport-Modus-Limit zu setzen.
+
+Der Bluetooth-Name des Scooters ist in
+`Sources/NinebotApp/NinebotTestView.swift` fest eingetragen (aktuell
+`"E2 Pro 0923"`). Wenn dein Scooter anders heißt, passe ihn dort vor dem
+Build an.

@@ -1,12 +1,12 @@
 //
 //  NinebotCrypto.swift
-//  Implementatie van het "Encryption2" protocol dat Segway-Ninebot voertuigen
-//  gebruiken: AES-128 in een eigen CTR-achtige mode met CBC-MAC authenticatie
-//  (gelijkaardig aan, maar niet identiek met, NIST CCM).
+//  Implementierung des "Encryption2"-Protokolls, das Segway-Ninebot-Fahrzeuge
+//  verwenden: AES-128 in einem eigenen CTR-ähnlichen Modus mit CBC-MAC-Authentifizierung
+//  (ähnlich, aber nicht identisch mit NIST CCM).
 //
-//  Community-gedocumenteerd via reverse-engineering van de officiële app,
-//  gepubliceerd voor interoperabiliteit onder EU-richtlijn 2009/24/EC art. 6.
-//  Enkel voor gebruik met je EIGEN voertuig.
+//  Von der Community per Reverse Engineering der offiziellen App dokumentiert,
+//  veröffentlicht zur Interoperabilität gemäß EU-Richtlinie 2009/24/EG Art. 6.
+//  Nur zur Verwendung mit dem EIGENEN Fahrzeug.
 //
 
 import Foundation
@@ -14,7 +14,7 @@ import CryptoKit
 
 enum NinebotCrypto {
 
-    // MARK: - Sleutelderivatie
+    // MARK: - Schlüsselableitung
 
     /// aes_key = SHA-1(key1_pad16 ‖ key2_pad16)[0:16]
     static func deriveKey(key1: [UInt8], key2: [UInt8]?) -> [UInt8] {
@@ -44,10 +44,10 @@ enum NinebotCrypto {
         return nonce
     }
 
-    // MARK: - SN-mode encryptie (na PRE_COMM, counter > 0)
+    // MARK: - SN-Modus-Verschlüsselung (nach PRE_COMM, counter > 0)
 
     /// plaintext = [0x5A, 0xA5, LEN] + payload (SRC/TARGET/CMD/INDEX/DATA)
-    /// Geeft het volledige frame terug: header(3, plain) + ct(payload.count) + enc_tag(4) + counter_BE(2)
+    /// Gibt den vollständigen Frame zurück: header(3, plain) + ct(payload.count) + enc_tag(4) + counter_BE(2)
     static func encryptSN(key: [UInt8], plaintext: [UInt8], counter: UInt32, auth: [UInt8]) -> [UInt8] {
         let header = Array(plaintext.prefix(3))
         let payload = Array(plaintext.dropFirst(3))
@@ -81,7 +81,7 @@ enum NinebotCrypto {
         return frame
     }
 
-    /// CBC-MAC over [header(3) + payload], teruggegeven als 4-byte tag
+    /// CBC-MAC über [header(3) + payload], zurückgegeben als 4-Byte-Tag
     private static func cbcMac(key: [UInt8], header: [UInt8], payload: [UInt8], nonce: [UInt8]) -> [UInt8] {
         let payloadLen = UInt8(payload.count & 0xFF)
         let b0: [UInt8] = [0x59] + nonce + [0x00, payloadLen]
@@ -101,7 +101,7 @@ enum NinebotCrypto {
         return Array(x.prefix(4))
     }
 
-    // MARK: - Non-SN-mode encryptie (enkel PRE_COMM request, counter == 0)
+    // MARK: - Non-SN-Modus-Verschlüsselung (nur PRE_COMM-Request, counter == 0)
 
     static func encryptNonSN(key: [UInt8], plaintext: [UInt8]) -> [UInt8] {
         let header = Array(plaintext.prefix(3))
@@ -134,7 +134,7 @@ enum NinebotCrypto {
         return frame
     }
 
-    // MARK: - Decryptie (respons van de step)
+    // MARK: - Entschlüsselung (Antwort des Scooters)
 
     enum DecryptError: Error {
         case tooShort
@@ -142,8 +142,8 @@ enum NinebotCrypto {
         case replay
     }
 
-    /// Decodeert een ontvangen frame. Bepaalt zelf SN vs non-SN op basis van de
-    /// counter-bytes op het einde (counter == 0 → non-SN mode).
+    /// Dekodiert einen empfangenen Frame. Bestimmt selbst SN vs. Non-SN anhand der
+    /// Counter-Bytes am Ende (counter == 0 → Non-SN-Modus).
     static func decrypt(key: [UInt8], ciphertext: [UInt8], auth: [UInt8]) throws -> (plaintext: [UInt8], counter: UInt32) {
         guard ciphertext.count >= 3 + 6 else { throw DecryptError.tooShort }
 
@@ -155,7 +155,7 @@ enum NinebotCrypto {
         let counter = (UInt32(trailer[4]) << 8) | UInt32(trailer[5])
 
         if counter == 0 {
-            // Non-SN mode: zelfde statische keystream, checksum ipv MAC
+            // Non-SN-Modus: gleicher statischer Keystream, Prüfsumme statt MAC
             let keystream = AES128.encryptBlock(key: key, block: [UInt8](repeating: 0, count: 16))
             var payload = [UInt8]()
             var offset = 0
@@ -183,7 +183,7 @@ enum NinebotCrypto {
                 blockIndex &+= 1
             }
 
-            // Tag verifiëren
+            // Tag verifizieren
             let a0: [UInt8] = [0x01] + nonce + [0x00, 0x00]
             let a0Keystream = AES128.encryptBlock(key: key, block: a0)
             let encTag = Array(trailer.prefix(4))
