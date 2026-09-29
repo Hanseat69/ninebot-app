@@ -69,7 +69,7 @@ struct TripRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(trip.start.formatted(date: .abbreviated, time: .shortened))
                 .font(.headline)
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Label(Format.kilometers(trip.distanceKm), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                 Label(Format.duration(trip.duration), systemImage: "clock")
                 if let used = trip.batteryUsed {
@@ -79,6 +79,8 @@ struct TripRow: View {
                     Label(String(format: "%.0f°", weather.temperature), systemImage: weather.symbol)
                 }
             }
+            .labelStyle(CompactLabelStyle())
+            .lineLimit(1)
             .font(.subheadline)
             .foregroundColor(.secondary)
             if let from = trip.startAddress, let to = trip.endAddress {
@@ -89,6 +91,16 @@ struct TripRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Symbol und Text dicht nebeneinander, ohne Zeilenumbruch.
+struct CompactLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon.imageScale(.small)
+            configuration.title.fixedSize()
+        }
     }
 }
 

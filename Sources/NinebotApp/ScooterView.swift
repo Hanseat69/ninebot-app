@@ -299,6 +299,10 @@ enum Format {
         String(format: "%.1f km", locale: Locale.current, km)
     }
 
+    static func wholeKilometers(_ km: Double) -> String {
+        String(format: "%.0f km", locale: Locale.current, km)
+    }
+
     static func speed(_ kmh: Double) -> String {
         String(format: "%.0f km/h", locale: Locale.current, kmh)
     }

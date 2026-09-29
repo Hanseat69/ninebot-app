@@ -39,9 +39,9 @@ struct MaintenanceItem: Codable, Identifiable {
 
     var intervalText: String {
         switch (intervalMonths, intervalKm) {
-        case let (m?, km?): return "Alle \(m) Monate oder \(Format.kilometers(km))"
+        case let (m?, km?): return "Alle \(m) Monate oder \(Format.wholeKilometers(km))"
         case let (m?, nil): return "Alle \(m) Monate"
-        case let (nil, km?): return "Alle \(Format.kilometers(km))"
+        case let (nil, km?): return "Alle \(Format.wholeKilometers(km))"
         default: return ""
         }
     }
@@ -289,14 +289,17 @@ private struct MaintenanceRow: View {
     }
 
     private var status: String {
+        let km = item.remainingKm(at: odometer)
+        let due = item.dueDate
+        if item.isDue(at: odometer) {
+            var reasons: [String] = []
+            if let km = km, km <= 0 { reasons.append("\(Format.wholeKilometers(-km)) überfällig") }
+            if let due = due, due <= Date() { reasons.append("fällig seit \(due.formatted(date: .abbreviated, time: .omitted))") }
+            return reasons.joined(separator: " · ").capitalizedFirst
+        }
         var parts: [String] = []
-        if let km = item.remainingKm(at: odometer) {
-            parts.append(km <= 0 ? "seit \(Format.kilometers(-km)) überfällig" : "in \(Format.kilometers(km))")
-        }
-        if let due = item.dueDate {
-            parts.append(due <= Date() ? "seit \(due.formatted(date: .abbreviated, time: .omitted)) fällig"
-                                       : "bis \(due.formatted(date: .abbreviated, time: .omitted))")
-        }
+        if let km = km { parts.append("in \(Format.wholeKilometers(km))") }
+        if let due = due { parts.append("am \(due.formatted(date: .abbreviated, time: .omitted))") }
         return parts.isEmpty ? "Startwert wird beim ersten Verbinden gesetzt" : "Fällig " + parts.joined(separator: " oder ")
     }
 }
@@ -324,7 +327,7 @@ private struct MaintenanceDetailView: View {
                             get: { km },
                             set: { maintenance.setIntervalKm(item.id, km: $0) }
                         ), in: 100...20000, step: 100) {
-                            Text("Eigenes Intervall: \(Format.kilometers(km))")
+                            Text("Eigenes Intervall: \(Format.wholeKilometers(km))")
                         }
                     }
                 }
@@ -352,3 +355,7 @@ extension MaintenanceStore {
     }
 }
 #endif
+
+private extension String {
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+}
