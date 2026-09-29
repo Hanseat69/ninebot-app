@@ -183,7 +183,7 @@ final class TripStore: ObservableObject {
         let iso = ISO8601DateFormatter()
         var gpx = """
         <?xml version="1.0" encoding="UTF-8"?>
-        <gpx version="1.1" creator="NinebotApp" xmlns="http://www.topografix.com/GPX/1/1">
+        <gpx version="1.1" creator="Scooterbrise" xmlns="http://www.topografix.com/GPX/1/1">
         <trk><name>Fahrt \(iso.string(from: trip.start))</name><trkseg>
 
         """

@@ -40,7 +40,7 @@ struct HelpView: View {
                     }
                 }
 
-                Section("Diese App") {
+                Section("Scooterbrise") {
                     NavigationLink { AppHelp() } label: {
                         Label("So funktioniert die App", systemImage: "questionmark.circle")
                     }
@@ -244,6 +244,6 @@ private struct AppHelp: View {
                 HelpText(title: "Internet", text: "Karten, Adressen und Routen kommen von Apple Karten. Wetter (nur wenn eingeschaltet) von Open-Meteo, mit auf ca. 1 km gerundetem Standort.")
             }
         }
-        .navigationTitle("Über die App")
+        .navigationTitle("Über Scooterbrise")
     }
 }

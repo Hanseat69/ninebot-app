@@ -59,11 +59,11 @@ jobs:
           cd "${{ steps.locate.outputs.project_dir }}"
           mkdir -p Payload
           cp -r "build/Build/Products/Release-iphoneos/NinebotApp.app" Payload/
-          zip -r NinebotApp-unsigned.ipa Payload
+          zip -r Scooterbrise.ipa Payload
 
       - name: Upload IPA as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NinebotApp-unsigned-ipa
-          path: ${{ steps.locate.outputs.project_dir }}/NinebotApp-unsigned.ipa
+          name: Scooterbrise-ipa
+          path: ${{ steps.locate.outputs.project_dir }}/Scooterbrise.ipa
           retention-days: 14

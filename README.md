@@ -1,6 +1,6 @@
-# NinebotApp — bauen ohne Mac
+# Scooterbrise — iOS-App für den Segway-Ninebot F2 Pro
 
-Dieses Repo enthält eine iOS-App (SwiftUI + CoreBluetooth) für den
+**Scooterbrise** ist eine iOS-App (SwiftUI + CoreBluetooth) für den
 **Segway-Ninebot F2 Pro** (und andere Ninebot-Scooter der F-Serie). Sie wird über
 GitHub Actions automatisch zu einer `.ipa`-Datei gebaut, ohne dass du selbst
 einen Mac oder Xcode brauchst.
@@ -28,8 +28,8 @@ einen Mac oder Xcode brauchst.
 3. Klicke **„Run workflow“** → **„Run workflow“** (grüner Knopf)
 4. Warte 3–5 Minuten, bis der grüne Haken erscheint
 5. Klicke auf den fertigen Lauf → unten bei **Artifacts** steht
-   `NinebotApp-unsigned-ipa` → herunterladen (eine ZIP-Datei mit der `.ipa`)
-6. ZIP entpacken → du hast jetzt `NinebotApp-unsigned.ipa`
+   `Scooterbrise-ipa` → herunterladen (eine ZIP-Datei mit der `.ipa`)
+6. ZIP entpacken → du hast jetzt `Scooterbrise.ipa`
 
 Das passiert auch automatisch bei jedem `git push` auf den `main`-Branch —
 sobald du Code änderst und pushst, steht ein neuer Build bereit.
@@ -39,7 +39,7 @@ sobald du Code änderst und pushst, steht ein neuer Build bereit.
 1. **Sideloadly** herunterladen und installieren (kostenlos, Windows und
    macOS): https://sideloadly.io
 2. iPhone per Kabel anschließen
-3. Sideloadly öffnen, `NinebotApp-unsigned.ipa` ins Fenster ziehen
+3. Sideloadly öffnen, `Scooterbrise.ipa` ins Fenster ziehen
 4. Deine **Apple-ID** eingeben (ein normales, kostenloses Konto reicht)
 5. **Start** klicken — Sideloadly signiert die App mit deiner Apple-ID und
    installiert sie auf dem iPhone

@@ -62,7 +62,7 @@ struct ScooterView: View {
                 }
             }
             }
-            .navigationTitle(model.connectedName ?? "Ninebot")
+            .navigationTitle(model.connectedName ?? "Scooterbrise")
         }
     }
 
