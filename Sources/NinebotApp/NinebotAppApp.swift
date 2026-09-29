@@ -5,6 +5,7 @@ struct NinebotAppApp: App {
     // Wird beim App-Start erzeugt, auch wenn iOS die App nur im Hintergrund
     // startet (z. B. weil sich der gemerkte Scooter meldet).
     private let model = ScooterModel.shared
+    private let documents = DocumentStore()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -24,9 +25,18 @@ struct NinebotAppApp: App {
             .environmentObject(model)
             .environmentObject(model.store)
             .environmentObject(model.maintenance)
+            .environmentObject(documents)
         }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { model.appDidBecomeActive() }
+            switch phase {
+            case .active:
+                documents.reload()
+                model.appDidBecomeActive()
+            case .background:
+                documents.lock()   // Dokumente beim Verlassen der App wieder sperren
+            default:
+                break
+            }
         }
     }
 }

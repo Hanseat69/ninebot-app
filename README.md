@@ -64,6 +64,10 @@ neuer Build nötig, außer du hast den Code geändert).
   Rekuperation, Tempomat, Rücklicht.
 - **Wetter** (optional, Open-Meteo) mit Hinweisen zu Glätte, Wind und Regen.
 - **Wartung** nach dem Original-Wartungsplan von Ninebot, mit Erinnerungen.
+- **Dokumente:** Versicherungsbestätigung, Betriebserlaubnis/Datenbestätigung,
+  Kaufbeleg — per Kamera-Scan, aus Fotos oder als PDF. **Face-ID-geschützt**,
+  verschlüsselt gespeichert, austauschbar mit Archiv, Erinnerung vor Ablauf
+  des Versicherungsjahres (Ende Februar), als PDF teilbar.
 - **Sperrbildschirm und Dynamic Island:** Tempo, Akku, Strecke, Fahrzeit.
 
 **Tab „Route“** — Ziel suchen, Route mit der Restreichweite abgleichen
@@ -87,14 +91,15 @@ Maximum für E-Scooter in Deutschland (eKFV).
 
 ### Datenschutz
 
-- Fahrten, Akku-Verlauf, Wartung und der gemerkte Scooter werden **nur auf dem
-  iPhone** gespeichert.
+- Fahrten, Akku-Verlauf, Wartung, Dokumente und der gemerkte Scooter werden
+  **nur auf dem iPhone** gespeichert. Dokumente zusätzlich mit iOS-Dateischutz
+  (verschlüsselt, solange das iPhone gesperrt ist) und optional Face ID.
 - Keine Fremdbibliotheken, kein Konto, keine Werbung, keine Analyse.
 - Internetverbindungen: **Apple Karten** (Karten, Adressen, Zielsuche,
   Routen) und — nur wenn eingeschaltet — **Open-Meteo** für das Wetter, mit
   auf ca. 1 km gerundetem Standort.
 - Berechtigungen: Bluetooth, Standort („Immer“ für die Automatik),
-  Mitteilungen (Wartung).
+  Mitteilungen (Wartung, Versicherung), Kamera (Dokumente scannen), Face ID.
 
 ### Grundlage und Stand
 

@@ -8,6 +8,7 @@ import SwiftUI
 struct ScooterView: View {
     @EnvironmentObject private var model: ScooterModel
     @EnvironmentObject private var maintenance: MaintenanceStore
+    @EnvironmentObject private var documents: DocumentStore
 
     var body: some View {
         NavigationStack {
@@ -41,6 +42,7 @@ struct ScooterView: View {
                 if model.weatherEnabled {
                     weatherSection
                 }
+                documentsSection
                 maintenanceSection
                 automationSection
             }
@@ -176,6 +178,36 @@ struct ScooterView: View {
         }
     }
 
+    private var documentsSection: some View {
+        Section {
+            NavigationLink {
+                DocumentsView()
+            } label: {
+                HStack {
+                    Label("Dokumente", systemImage: "lock.doc")
+                    Spacer()
+                    insuranceBadge
+                }
+            }
+        }
+    }
+
+    /// Zeigt nur den Status der Versicherung, keine persönlichen Daten.
+    @ViewBuilder private var insuranceBadge: some View {
+        if let insurance = documents.currentInsurance, let until = insurance.validUntil {
+            if insurance.isExpired {
+                Badge(text: "Versicherung abgelaufen", color: .red)
+            } else if insurance.expiresSoon {
+                Badge(text: "Versicherung bis \(until.formatted(.dateTime.day().month()))", color: .orange)
+            } else {
+                Text("versichert bis \(until.formatted(date: .numeric, time: .omitted))")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+        } else {
+            Badge(text: "Versicherung fehlt", color: .gray)
+        }
+    }
+
     private var maintenanceSection: some View {
         Section {
             NavigationLink {
@@ -186,12 +218,7 @@ struct ScooterView: View {
                     Spacer()
                     let due = maintenance.dueCount(at: model.odometer)
                     if due > 0 {
-                        Text("\(due) fällig")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.orange))
-                            .foregroundColor(.white)
+                        Badge(text: "\(due) fällig", color: .orange)
                     }
                 }
             }
@@ -220,6 +247,20 @@ struct ScooterView: View {
         } footer: {
             Text("Nach der ersten Verbindung merkt sich die App deinen Scooter und verbindet sich beim Einschalten von selbst — auch im Hintergrund. Solange er verbunden ist, wird die Fahrt aufgezeichnet. Für die Aufzeichnung im Hintergrund braucht die App den Standort „Immer“. Alle Daten bleiben auf deinem iPhone. Nur wenn „Wetter anzeigen“ an ist, geht der auf ca. 1 km gerundete Standort an Open-Meteo.")
         }
+    }
+}
+
+struct Badge: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption.bold())
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(color))
+            .foregroundColor(.white)
     }
 }
 

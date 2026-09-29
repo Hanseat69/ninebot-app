@@ -73,7 +73,7 @@ private struct ManualPDFView: View {
     }
 }
 
-private struct PDFKitView: UIViewRepresentable {
+struct PDFKitView: UIViewRepresentable {
     let url: URL
 
     func makeUIView(context: Context) -> PDFView {

@@ -31,6 +31,9 @@ targets:
         NSLocationWhenInUseUsageDescription: "Für das Fahrtenbuch: zeichnet die Strecke deiner Fahrten auf. Die Daten bleiben auf deinem iPhone."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Damit Fahrten auch automatisch aufgezeichnet werden, wenn die App im Hintergrund ist. Die Daten bleiben auf deinem iPhone."
         NSSupportsLiveActivities: true
+        NSFaceIDUsageDescription: "Schützt deine Scooter-Dokumente (Versicherung, Betriebserlaubnis) vor fremden Blicken."
+        NSCameraUsageDescription: "Zum Einscannen von Dokumenten wie der Versicherungsbestätigung."
+
         UIBackgroundModes:
           - bluetooth-central
           - location
