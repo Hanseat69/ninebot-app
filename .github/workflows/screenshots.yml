@@ -96,7 +96,9 @@ jobs:
           shoot scooter-automation
           shoot scooter-pairing
           shoot scooter-idle
+          shoot route-home 10
           shoot route 15
+          shoot navigation 18
           shoot trips
           shoot trip-detail 12
           shoot battery

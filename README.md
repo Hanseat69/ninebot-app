@@ -70,9 +70,16 @@ neuer Build nötig, außer du hast den Code geändert).
   des Versicherungsjahres (Ende Februar), als PDF teilbar.
 - **Sperrbildschirm und Dynamic Island:** Tempo, Akku, Strecke, Fahrzeit.
 
-**Tab „Route“** — Ziel suchen, Route mit der Restreichweite abgleichen
-(inkl. Kälteabschlag), Navigation in Apple Maps. Fahrradrouten in der App ab
-iOS 26, sonst Fußwegroute als Näherung.
+**Tab „Route“ — Navigation**
+- **Navigation in der App:** großer Richtungspfeil mit Entfernung, deutsche
+  Sprachansagen, Karte in Fahrtrichtung, Tempo/Akku/Reststrecke/Ankunft,
+  Neuberechnung beim Abweichen; Display bleibt an, Ansagen auch bei
+  gesperrtem iPhone.
+- **Reichweitenprüfung** der Route und **Reichweitenkreis** (hin und zurück /
+  nur hin) aus der Restreichweite des Scooters, mit Kälteabschlag.
+- **Favoriten** (Zuhause, Arbeit, eigene) und **Rückweg** zum Startpunkt.
+- Fahrradrouten ab iOS 26, sonst Fußwegroute als Näherung; alternativ
+  Übergabe an Apple Maps.
 
 **Tab „Fahrten“ — automatisches Fahrtenbuch**
 Datum, Abfahrt, Ankunft, Dauer, Strecke (Scooter und GPS), Ø-/Höchsttempo,

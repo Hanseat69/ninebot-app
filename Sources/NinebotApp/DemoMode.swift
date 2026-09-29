@@ -25,6 +25,7 @@ struct MainTabView: View {
     @State var selection: AppTab = .scooter
     var scooterScroll: String? = nil
     var routeDemoQuery: String? = nil
+    var routeDemoNavigate = false
     /// Nur für Screenshots: ersetzt den Inhalt eines Tabs durch eine Unterseite.
     var overrideTab: AppTab? = nil
     var override: AnyView? = nil
@@ -34,7 +35,7 @@ struct MainTabView: View {
             content(.scooter, ScooterView(scrollTarget: scooterScroll))
                 .tabItem { Label("Scooter", systemImage: "scooter") }
                 .tag(AppTab.scooter)
-            content(.route, RoutePlannerView(demoQuery: routeDemoQuery))
+            content(.route, RoutePlannerView(demoQuery: routeDemoQuery, demoStartNavigation: routeDemoNavigate))
                 .tabItem { Label("Route", systemImage: "arrow.triangle.turn.up.right.diamond") }
                 .tag(AppTab.route)
             content(.trips, TripListView())
@@ -78,8 +79,12 @@ struct DemoRootView: View {
             MainTabView(selection: .scooter, scooterScroll: "weather")
         case "scooter-automation":
             MainTabView(selection: .scooter, scooterScroll: "automation")
+        case "route-home":
+            MainTabView(selection: .route)
         case "route":
             MainTabView(selection: .route, routeDemoQuery: "Elbphilharmonie Hamburg")
+        case "navigation":
+            MainTabView(selection: .route, routeDemoQuery: "Elbphilharmonie Hamburg", routeDemoNavigate: true)
         case "trips":
             MainTabView(selection: .trips)
         case "trip-detail":

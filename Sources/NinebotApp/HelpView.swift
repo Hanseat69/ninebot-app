@@ -236,8 +236,12 @@ private struct AppHelp: View {
                 HelpText(title: "App nicht wegwischen", text: "Wird die App aus der App-Übersicht entfernt, schaltet iOS die Automatik ab, bis du sie wieder öffnest.")
                 HelpText(title: "Sperrbildschirm", text: "Tempo, Akku und Strecke erscheinen während der Fahrt auf dem Sperrbildschirm. Startet eine Fahrt im Hintergrund, erscheint die Anzeige nach dem ersten Öffnen der App.")
             }
-            Section("Route") {
-                HelpText(title: "Reichweitenprüfung", text: "Ziel suchen: Die App vergleicht die Strecke mit der Restreichweite des Scooters und übergibt die Route an Apple Maps.")
+            Section("Route und Navigation") {
+                HelpText(title: "Ziel wählen", text: "Ziel suchen oder einen Favoriten antippen. Die App berechnet die Route (ab iOS 26 als Fahrradroute) und prüft, ob die Restreichweite des Scooters reicht.")
+                HelpText(title: "Navigation", text: "„Navigation starten“: großer Richtungspfeil, Entfernung, Sprachansagen, Karte in Fahrtrichtung, dazu Tempo, Akku und Ankunftszeit. Kommst du von der Route ab, wird sie neu berechnet. Das Display bleibt an; die Ansagen laufen auch bei gesperrtem iPhone.")
+                HelpText(title: "Rückweg", text: "Am Ziel „Rückweg starten“ tippen — oder später im Tab Route „Zurück zum Startpunkt“.")
+                HelpText(title: "Reichweitenkreis", text: "Ohne gewähltes Ziel zeigt die Karte, wie weit du kommst: grün hin und zurück, orange nur hin.")
+                HelpText(title: "Favoriten", text: "Ein gewähltes Ziel über „Als Favorit speichern“ als Zuhause, Arbeit oder mit eigenem Namen sichern. Zum Löschen nach links wischen.")
             }
             Section("Datenschutz") {
                 HelpText(title: "Auf dem iPhone", text: "Fahrten, Akku-Verlauf und Wartung werden nur auf deinem iPhone gespeichert. Kein Konto, keine Werbung, kein Tracking.")
