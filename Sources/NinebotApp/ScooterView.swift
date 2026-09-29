@@ -7,6 +7,7 @@ import SwiftUI
 
 struct ScooterView: View {
     @EnvironmentObject private var model: ScooterModel
+    @EnvironmentObject private var maintenance: MaintenanceStore
 
     var body: some View {
         NavigationStack {
@@ -37,8 +38,13 @@ struct ScooterView: View {
                     }
                 }
 
+                if model.weatherEnabled {
+                    weatherSection
+                }
+                maintenanceSection
                 automationSection
             }
+            .refreshable { model.refreshWeather(force: true) }
             .navigationTitle(model.connectedName ?? "Ninebot")
         }
     }
@@ -143,6 +149,55 @@ struct ScooterView: View {
         }
     }
 
+    // MARK: - Wetter und Wartung
+
+    private var weatherSection: some View {
+        Section {
+            if let weather = model.weather {
+                Label(weather.summary, systemImage: weather.symbol)
+                ValueRow(title: "Temperatur", value: String(format: "%.0f °C", locale: Locale.current, weather.temperature))
+                ValueRow(title: "Wind", value: String(format: "%.0f km/h", locale: Locale.current, weather.windSpeed)
+                         + (weather.windGusts.map { String(format: ", Böen %.0f", locale: Locale.current, $0) } ?? ""))
+                if let chance = weather.rainChance {
+                    ValueRow(title: "Regen (nächste 2 h)", value: "\(chance) %")
+                }
+                ForEach(weather.warnings, id: \.self) { warning in
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                }
+            } else {
+                Text("Wird geladen … (braucht die Standortfreigabe)")
+                    .foregroundColor(.secondary)
+            }
+        } header: {
+            Text("Wetter")
+        } footer: {
+            Text("Daten: Open-Meteo.com. Zum Aktualisieren die Liste nach unten ziehen.")
+        }
+    }
+
+    private var maintenanceSection: some View {
+        Section {
+            NavigationLink {
+                MaintenanceView()
+            } label: {
+                HStack {
+                    Label("Wartung", systemImage: "wrench.and.screwdriver")
+                    Spacer()
+                    let due = maintenance.dueCount(at: model.odometer)
+                    if due > 0 {
+                        Text("\(due) fällig")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.orange))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Automatik
 
     private var automationSection: some View {
@@ -155,6 +210,7 @@ struct ScooterView: View {
                 }
                 Button("Scooter vergessen", role: .destructive) { model.forgetScooter() }
             }
+            Toggle("Wetter anzeigen (Open-Meteo)", isOn: $model.weatherEnabled)
             ValueRow(title: "Standort", value: model.locationStatusText)
             if let title = model.locationButtonTitle {
                 Button(title) { model.requestLocationAccess() }
@@ -162,7 +218,7 @@ struct ScooterView: View {
         } header: {
             Text("Automatik & Fahrtenbuch")
         } footer: {
-            Text("Nach der ersten Verbindung merkt sich die App deinen Scooter und verbindet sich beim Einschalten von selbst — auch im Hintergrund. Solange er verbunden ist, wird die Fahrt aufgezeichnet. Für die Aufzeichnung im Hintergrund braucht die App den Standort „Immer“. Alle Daten bleiben auf deinem iPhone.")
+            Text("Nach der ersten Verbindung merkt sich die App deinen Scooter und verbindet sich beim Einschalten von selbst — auch im Hintergrund. Solange er verbunden ist, wird die Fahrt aufgezeichnet. Für die Aufzeichnung im Hintergrund braucht die App den Standort „Immer“. Alle Daten bleiben auf deinem iPhone. Nur wenn „Wetter anzeigen“ an ist, geht der auf ca. 1 km gerundete Standort an Open-Meteo.")
         }
     }
 }

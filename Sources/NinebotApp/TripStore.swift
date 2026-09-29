@@ -45,6 +45,7 @@ struct Trip: Codable, Identifiable {
     var endOdometer: Double?
     var startAddress: String?
     var endAddress: String?
+    var weather: WeatherInfo?
 
     init(scooterName: String, start: Date) {
         self.scooterName = scooterName
@@ -202,6 +203,61 @@ final class TripStore: ObservableObject {
         }
     }
 
+    /// Alle GPS-Punkte einer Fahrt als CSV (deutsches Excel-Format: ; und Dezimalkomma).
+    func csvFile(for trip: Trip) -> URL? {
+        guard !trip.points.isEmpty else { return nil }
+        var csv = "Zeit;Breitengrad;Längengrad;Höhe (m);Geschwindigkeit (km/h)\n"
+        for p in trip.points {
+            csv += [DateFormatter.csv.string(from: p.time),
+                    TripStore.number(p.latitude, 6), TripStore.number(p.longitude, 6),
+                    TripStore.number(p.altitude, 1),
+                    p.speed >= 0 ? TripStore.number(p.speed * 3.6, 1) : ""].joined(separator: ";") + "\n"
+        }
+        return write(csv, name: "Fahrt-\(DateFormatter.fileName.string(from: trip.start)).csv")
+    }
+
+    /// Übersicht aller Fahrten als CSV.
+    func csvFileForAllTrips() -> URL? {
+        var csv = "Datum;Abfahrt;Ankunft;Dauer (min);Strecke (km);Ø km/h;Max km/h (GPS);"
+            + "Akku Start (%);Akku Ende (%);Verbrauch (%/km);Start;Ziel;Wetter\n"
+        for t in trips.reversed() {
+            let fields: [String] = [
+                t.start.formatted(date: .numeric, time: .omitted),
+                t.start.formatted(date: .omitted, time: .shortened),
+                t.end.formatted(date: .omitted, time: .shortened),
+                TripStore.number(t.duration / 60, 0),
+                TripStore.number(t.distanceKm, 2),
+                t.averageSpeed.map { TripStore.number($0, 1) } ?? "",
+                t.maxSpeed > 0 ? TripStore.number(t.maxSpeed, 1) : "",
+                t.startBattery.map(String.init) ?? "",
+                t.endBattery.map(String.init) ?? "",
+                t.consumptionPerKm.map { TripStore.number($0, 1) } ?? "",
+                t.startAddress ?? "",
+                t.endAddress ?? "",
+                t.weather?.shortText ?? "",
+            ]
+            csv += fields.map(TripStore.csvField).joined(separator: ";") + "\n"
+        }
+        return write(csv, name: "Fahrtenbuch.csv")
+    }
+
+    private func write(_ text: String, name: String) -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        // Mit BOM, damit Excel die Umlaute richtig erkennt.
+        guard let data = ("\u{FEFF}" + text).data(using: .utf8),
+              (try? data.write(to: url, options: .atomic)) != nil else { return nil }
+        return url
+    }
+
+    private static func number(_ value: Double, _ digits: Int) -> String {
+        String(format: "%.\(digits)f", locale: Locale(identifier: "de_DE"), value)
+    }
+
+    private static func csvField(_ value: String) -> String {
+        guard value.contains(";") || value.contains("\"") || value.contains("\n") else { return value }
+        return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
     // MARK: - Dateien
 
     private func load<T: Decodable>(_ type: T.Type, from file: String) -> T? {
@@ -216,6 +272,13 @@ final class TripStore: ObservableObject {
 }
 
 extension DateFormatter {
+    static let csv: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.dateFormat = "dd.MM.yyyy HH:mm:ss"
+        return f
+    }()
+
     static let fileName: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")

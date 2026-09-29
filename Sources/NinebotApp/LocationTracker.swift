@@ -10,6 +10,9 @@ final class LocationTracker: NSObject {
 
     private let manager = CLLocationManager()
     private var isRunning = false
+    private var onceHandlers: [(CLLocation?) -> Void] = []
+
+    private(set) var lastLocation: CLLocation?
 
     var onLocations: (([CLLocation]) -> Void)?
     var onAuthorizationChange: ((CLAuthorizationStatus) -> Void)?
@@ -46,6 +49,20 @@ final class LocationTracker: NSObject {
         manager.startUpdatingLocation()
     }
 
+    /// Liefert einmalig die aktuelle Position (höchstens 5 Minuten alt).
+    func requestOnce(_ handler: @escaping (CLLocation?) -> Void) {
+        if let last = lastLocation, -last.timestamp.timeIntervalSinceNow < 300 {
+            handler(last)
+            return
+        }
+        guard isAuthorized else {
+            handler(nil)
+            return
+        }
+        onceHandlers.append(handler)
+        manager.requestLocation()
+    }
+
     func stop() {
         guard isRunning else { return }
         isRunning = false
@@ -57,11 +74,18 @@ final class LocationTracker: NSObject {
 extension LocationTracker: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        lastLocation = locations.last ?? lastLocation
+        let handlers = onceHandlers
+        onceHandlers = []
+        handlers.forEach { $0(lastLocation) }
         onLocations?(locations)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Standort nicht verfügbar: \(error.localizedDescription)")
+        let handlers = onceHandlers
+        onceHandlers = []
+        handlers.forEach { $0(nil) }
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

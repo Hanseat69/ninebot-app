@@ -37,6 +37,7 @@ final class ScooterModel: ObservableObject {
     private enum Keys {
         static let autoConnect = "autoConnect"
         static let knownScooter = "knownScooter"
+        static let weatherEnabled = "weatherEnabled"
     }
 
     // MARK: Verbindung
@@ -75,10 +76,28 @@ final class ScooterModel: ObservableObject {
     @Published private(set) var activeTrip: Trip?
     @Published private(set) var gpsSpeed: Double?     // km/h
 
+    // MARK: Zuletzt bekannte Scooterwerte (auch nach dem Trennen)
+    @Published private(set) var odometer: Double?        // km
+    @Published private(set) var remainingRangeKm: Double?
+    @Published private(set) var batteryPercent: Int?
+
+    // MARK: Wartung
+    let maintenance = MaintenanceStore()
+
+    // MARK: Wetter (Open-Meteo, nur wenn eingeschaltet)
+    @Published var weatherEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(weatherEnabled, forKey: Keys.weatherEnabled)
+            if weatherEnabled { refreshWeather(force: true) } else { weather = nil }
+        }
+    }
+    @Published private(set) var weather: WeatherInfo?
+
     private let bleManager: NinebotBLEManager
     private let session: NinebotSession
     private let location = LocationTracker()
     private let geocoder = CLGeocoder()
+    private let liveActivity = LiveActivityController()
 
     private var currentScooter: KnownScooter?
     private var scanID = 0
@@ -87,14 +106,13 @@ final class ScooterModel: ObservableObject {
     private var autoPaused = false
     private var handshakeFailures = 0
     private var lastActiveSave = Date.distantPast
-    private var lastBatteryPercent: Int?
-    private var lastOdometer: Double?
 
     private init() {
         let ble = NinebotBLEManager()
         bleManager = ble
         session = NinebotSession(bleManager: ble)
         _autoConnect = Published(initialValue: UserDefaults.standard.object(forKey: Keys.autoConnect) as? Bool ?? true)
+        _weatherEnabled = Published(initialValue: UserDefaults.standard.bool(forKey: Keys.weatherEnabled))
         if let data = UserDefaults.standard.data(forKey: Keys.knownScooter) {
             knownScooter = try? JSONDecoder().decode(KnownScooter.self, from: data)
         }
@@ -109,8 +127,41 @@ final class ScooterModel: ObservableObject {
             if self.activeTrip != nil { self.location.start() }
         }
         locationStatus = location.authorization
+        odometer = store.snapshots.last(where: { $0.odometer != nil })?.odometer
 
         finishInterruptedTrip()
+    }
+
+    /// Die App kommt in den Vordergrund.
+    func appDidBecomeActive() {
+        if let trip = activeTrip, !liveActivity.isRunning {
+            liveActivity.start(name: trip.scooterName, start: trip.start, state: liveState)
+        }
+        refreshWeather(force: false)
+    }
+
+    // MARK: - Wetter
+
+    func refreshWeather(force: Bool) {
+        guard weatherEnabled else { return }
+        if !force, let weather = weather, -weather.time.timeIntervalSinceNow < 15 * 60 { return }
+        location.requestOnce { [weak self] location in
+            guard let coordinate = location?.coordinate else { return }
+            WeatherService.fetch(for: coordinate) { result in
+                guard let self = self, case .success(let info) = result else { return }
+                self.weather = info
+                if self.activeTrip != nil && self.activeTrip?.weather == nil {
+                    self.activeTrip?.weather = info
+                }
+            }
+        }
+    }
+
+    // MARK: - Live Activity
+
+    private var liveState: LiveState {
+        LiveState(speed: gpsSpeed, battery: batteryPercent,
+                  distanceKm: activeTrip?.distanceKm ?? 0, rangeKm: remainingRangeKm)
     }
 
     // MARK: - Status für die Oberfläche
@@ -349,8 +400,8 @@ final class ScooterModel: ObservableObject {
         guard i < registers.count, state == .authenticated else {
             isReading = false
             if i >= registers.count {
-                store.addSnapshot(BatterySnapshot(date: Date(), percent: lastBatteryPercent,
-                                                  health: health, odometer: lastOdometer))
+                store.addSnapshot(BatterySnapshot(date: Date(), percent: batteryPercent,
+                                                  health: health, odometer: odometer))
             }
             return
         }
@@ -451,26 +502,34 @@ final class ScooterModel: ObservableObject {
 
     private func startTrip() {
         guard activeTrip == nil else { return }
-        activeTrip = Trip(scooterName: currentScooter?.name ?? "Scooter", start: Date())
+        var trip = Trip(scooterName: currentScooter?.name ?? "Scooter", start: Date())
+        trip.weather = weather.flatMap { -$0.time.timeIntervalSinceNow < 30 * 60 ? $0 : nil }
+        activeTrip = trip
         location.start()
+        liveActivity.start(name: trip.scooterName, start: trip.start, state: liveState)
+        refreshWeather(force: false)
     }
 
     private func updateTrip(with data: [UInt8], from register: NinebotRegister) {
         switch register.id {
         case NinebotRegister.batteryPercent.id:
             let percent = NinebotValue.le16(data)
-            lastBatteryPercent = percent
+            batteryPercent = percent
             if activeTrip?.startBattery == nil { activeTrip?.startBattery = percent }
             activeTrip?.endBattery = percent
         case NinebotRegister.totalMileage.id:
             let km = NinebotValue.kilometers(data)
-            lastOdometer = km
+            odometer = km
+            maintenance.update(odometer: km)
             if activeTrip?.startOdometer == nil { activeTrip?.startOdometer = km }
             activeTrip?.endOdometer = km
+        case NinebotRegister.remainingRange.id:
+            remainingRangeKm = Double(NinebotValue.le16(data)) / 100
         default:
             return
         }
         activeTrip?.end = Date()
+        liveActivity.update(liveState)
     }
 
     private func record(_ locations: [CLLocation]) {
@@ -481,6 +540,7 @@ final class ScooterModel: ObservableObject {
         locations.forEach { trip.append($0) }
         trip.end = Date()
         activeTrip = trip
+        liveActivity.update(liveState)
 
         if Date().timeIntervalSince(lastActiveSave) > 30 {
             lastActiveSave = Date()
@@ -490,6 +550,7 @@ final class ScooterModel: ObservableObject {
 
     private func finishTrip() {
         gpsSpeed = nil
+        liveActivity.end()
         guard let trip = activeTrip else { return }
         activeTrip = nil
         store.saveActive(nil)
