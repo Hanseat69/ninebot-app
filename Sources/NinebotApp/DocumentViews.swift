@@ -115,6 +115,11 @@ struct DocumentDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
     @State private var editing = false
+
+    init(documentID: UUID) {
+        self.documentID = documentID
+    }
+
     @State private var shareURL: URL?
     @State private var confirmDelete = false
 
@@ -190,6 +195,11 @@ struct DocumentEditor: View {
 
     let kind: DocumentKind
     let existing: ScooterDocument?
+
+    init(kind: DocumentKind, existing: ScooterDocument?) {
+        self.kind = kind
+        self.existing = existing
+    }
 
     @State private var title = ""
     @State private var insurer = ""

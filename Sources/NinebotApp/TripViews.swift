@@ -99,6 +99,10 @@ struct TripDetailView: View {
     @State private var gpxURL: URL?
     @State private var csvURL: URL?
 
+    init(tripID: UUID) {
+        self.tripID = tripID
+    }
+
     var body: some View {
         if let trip = store.trips.first(where: { $0.id == tripID }) {
             List {

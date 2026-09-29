@@ -286,3 +286,62 @@ extension DateFormatter {
         return f
     }()
 }
+
+#if DEBUG
+// MARK: - Beispieldaten für Screenshots
+
+extension TripStore {
+    func loadDemo() {
+        let routes: [(daysAgo: Int, hour: Int, minute: Int, points: Int, heading: Double, from: String, to: String, temp: Double, code: Int)] = [
+            (0, 7, 42, 190, 0.6, "Mönckebergstraße, Hamburg", "Großer Burstah 31, Hamburg", 12, 1),
+            (1, 17, 5, 260, 2.2, "Am Sandtorkai 1, Hamburg", "Eppendorfer Weg 88, Hamburg", 16, 2),
+            (2, 8, 15, 150, 4.0, "Lange Reihe 12, Hamburg", "Jungfernstieg 7, Hamburg", 9, 3),
+            (4, 18, 30, 320, 1.1, "Schanzenstraße 40, Hamburg", "Övelgönne 13, Hamburg", 19, 0),
+            (6, 12, 10, 110, 5.2, "Mühlenkamp 23, Hamburg", "Hofweg 60, Hamburg", 7, 61),
+            (9, 9, 0, 230, 3.3, "Steindamm 5, Hamburg", "Osterstraße 101, Hamburg", 11, 2),
+        ]
+        var odometer = 412.7
+        var demo: [Trip] = []
+        for (index, r) in routes.enumerated() {
+            let day = Calendar.current.date(byAdding: .day, value: -r.daysAgo, to: Date()) ?? Date()
+            var start = Calendar.current.date(bySettingHour: r.hour, minute: r.minute, second: 0, of: day) ?? day
+            if start > Date() { start = Date().addingTimeInterval(-3600) }
+            var trip = Trip(scooterName: "F2 Pro 3A1C", start: start)
+
+            var lat = 53.5511 + Double(index) * 0.004
+            var lon = 9.9937 - Double(index) * 0.006
+            for k in 0..<r.points {
+                let t = Double(k)
+                let angle = r.heading + 0.7 * sin(t / 30)
+                let kmh = max(3, min(21, 14 + 7 * sin(t / 11) + 3 * sin(t / 4.3)))
+                let step = kmh / 3.6 * 4
+                lat += step * cos(angle) / 111_000
+                lon += step * sin(angle) / (111_000 * cos(lat * .pi / 180))
+                trip.append(CLLocation(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                       altitude: 12, horizontalAccuracy: 5, verticalAccuracy: 5,
+                                       course: angle * 180 / .pi, speed: kmh / 3.6,
+                                       timestamp: start.addingTimeInterval(t * 4)))
+            }
+            trip.end = start.addingTimeInterval(Double(r.points) * 4 + 20)
+            let km = trip.gpsDistance / 1000
+            trip.endOdometer = (odometer * 10).rounded() / 10
+            trip.startOdometer = trip.endOdometer.map { $0 - km }
+            odometer -= km + 1.3
+            trip.startBattery = 92 - index * 4
+            trip.endBattery = (trip.startBattery ?? 90) - Int((km * 1.9).rounded())
+            trip.startAddress = r.from
+            trip.endAddress = r.to
+            trip.weather = WeatherInfo(time: start, temperature: r.temp, windSpeed: 12, windGusts: 25,
+                                       precipitation: 0, rainChance: 10, code: r.code)
+            demo.append(trip)
+        }
+        trips = demo
+
+        snapshots = (0..<6).map { month in
+            BatterySnapshot(date: Calendar.current.date(byAdding: .month, value: month - 5, to: Date()) ?? Date(),
+                            percent: 80, health: [100, 100, 99, 99, 98, 97][month],
+                            odometer: 60 + Double(month) * 70)
+        }
+    }
+}
+#endif

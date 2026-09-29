@@ -184,6 +184,7 @@ final class MaintenanceStore: ObservableObject {
     }
 
     func requestNotificationPermission() {
+        guard !DemoMode.isActive else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
@@ -338,3 +339,16 @@ private struct MaintenanceDetailView: View {
         }
     }
 }
+
+#if DEBUG
+extension MaintenanceStore {
+    /// Beispiel: vor 4 Monaten und 180 km zuletzt gewartet → die 3-Monats-Punkte sind fällig.
+    func loadDemo(odometer: Double) {
+        let fourMonthsAgo = Calendar.current.date(byAdding: .month, value: -4, to: Date()) ?? Date()
+        for i in items.indices {
+            items[i].lastServiceKm = odometer - 180
+            items[i].lastServiceDate = fourMonthsAgo
+        }
+    }
+}
+#endif

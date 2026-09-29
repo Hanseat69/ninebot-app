@@ -53,7 +53,7 @@ struct HelpView: View {
 
 // MARK: - Original-PDF
 
-private struct ManualPDFView: View {
+struct ManualPDFView: View {
     private let url = Bundle.main.url(forResource: "Anleitung-F2", withExtension: "pdf")
 
     var body: some View {
@@ -131,7 +131,7 @@ private struct OperationHelp: View {
     }
 }
 
-private struct SpecsHelp: View {
+struct SpecsHelp: View {
     var body: some View {
         List {
             Section {
@@ -197,7 +197,7 @@ private struct ChargingHelp: View {
     }
 }
 
-private struct ErrorCodesHelp: View {
+struct ErrorCodesHelp: View {
     @EnvironmentObject private var model: ScooterModel
     @State private var search = ""
 

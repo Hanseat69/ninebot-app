@@ -134,6 +134,7 @@ final class ScooterModel: ObservableObject {
 
     /// Die App kommt in den Vordergrund.
     func appDidBecomeActive() {
+        guard !DemoMode.isActive else { return }
         if let trip = activeTrip, !liveActivity.isRunning {
             liveActivity.start(name: trip.scooterName, start: trip.start, state: liveState)
         }
@@ -143,7 +144,7 @@ final class ScooterModel: ObservableObject {
     // MARK: - Wetter
 
     func refreshWeather(force: Bool) {
-        guard weatherEnabled else { return }
+        guard weatherEnabled, !DemoMode.isActive else { return }
         if !force, let weather = weather, -weather.time.timeIntervalSinceNow < 15 * 60 { return }
         location.requestOnce { [weak self] location in
             guard let coordinate = location?.coordinate else { return }
@@ -299,6 +300,7 @@ final class ScooterModel: ObservableObject {
     }
 
     private func handle(_ newState: NinebotSessionState) {
+        guard !DemoMode.isActive else { return }
         let oldState = state
         state = newState
 
@@ -589,3 +591,59 @@ final class ScooterModel: ObservableObject {
         return [street, placemark.locality].filter { !($0 ?? "").isEmpty }.compactMap { $0 }.joined(separator: ", ")
     }
 }
+
+#if DEBUG
+// MARK: - Beispieldaten für Screenshots
+
+extension ScooterModel {
+    func loadDemo(connected: Bool, pairing: Bool) {
+        let name = "F2 Pro 3A1C"
+        knownScooter = KnownScooter(id: UUID(), name: name)
+        locationStatus = .authorizedAlways
+        odometer = 412.7
+        remainingRangeKm = 38.5
+        batteryPercent = 78
+        weatherEnabled = true
+        weather = WeatherInfo(time: Date(), temperature: 14, windSpeed: 18, windGusts: 32,
+                              precipitation: 0, rainChance: 20, code: 2)
+        maintenance.loadDemo(odometer: 412.7)
+
+        guard connected else {
+            state = pairing ? .waitingForButtonPress : .idle
+            connectedName = pairing ? name : nil
+            return
+        }
+        state = .authenticated
+        connectedName = name
+
+        func le(_ v: Int) -> [UInt8] { [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF)] }
+        let live: [(NinebotRegister, [UInt8])] = [
+            (.batteryPercent, le(78)), (.remainingRange, le(3850)), (.batteryVoltage, le(3984)),
+            (.batteryCurrent, le(412)), (.tripDistance, le(321)), (.tripTime, le(760)),
+            (.totalMileage, le(412_700 & 0xFFFF) + le(412_700 >> 16)),
+        ]
+        liveValues = live.map { ScooterValue(id: $0.0.id, title: $0.0.title, text: $0.0.format($0.1)) }
+        let overview: [(NinebotRegister, [UInt8])] = [
+            (.batteryHealth, le(97)), (.batteryTemperature, le(38)), (.bodyTemperature, le(213)),
+            (.workMode, le(0)), (.normalSpeedLimit, le(200)), (.speedLimit, le(200)),
+            (.locked, le(0)), (.errorCode, le(0)), (.firmware, le(0x0121)),
+            (.serialNumber, Array("N6GSD2341C0042".utf8)),
+        ]
+        values = overview.map { ScooterValue(id: $0.0.id, title: $0.0.title, text: $0.0.format($0.1)) }
+        kersLevel = 1
+        cruiseControl = false
+        tailLight = true
+        speedLimit = 20
+        gpsSpeed = 18.4
+
+        var trip = Trip(scooterName: name, start: Date().addingTimeInterval(-760))
+        trip.startBattery = 81
+        trip.endBattery = 78
+        trip.startOdometer = 409.5
+        trip.endOdometer = 412.7
+        trip.end = Date()
+        trip.weather = weather
+        activeTrip = trip
+    }
+}
+#endif

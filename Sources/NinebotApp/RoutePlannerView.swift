@@ -14,6 +14,11 @@ import MapKit
 struct RoutePlannerView: View {
     @EnvironmentObject private var model: ScooterModel
     @StateObject private var planner = RoutePlanner()
+    var demoQuery: String? = nil
+
+    init(demoQuery: String? = nil) {
+        self.demoQuery = demoQuery
+    }
 
     var body: some View {
         NavigationStack {
@@ -86,6 +91,12 @@ struct RoutePlannerView: View {
                 }
             }
             .navigationTitle("Route")
+            .onAppear {
+                if let query = demoQuery, planner.route == nil {
+                    planner.query = query
+                    planner.search(selectFirst: true)
+                }
+            }
         }
     }
 }
@@ -134,7 +145,7 @@ final class RoutePlanner: ObservableObject {
 
     private var activeSearch: MKLocalSearch?
 
-    func search() {
+    func search(selectFirst: Bool = false) {
         let text = query.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
         activeSearch?.cancel()
@@ -150,6 +161,8 @@ final class RoutePlanner: ObservableObject {
             self.results = response?.mapItems ?? []
             if self.results.isEmpty {
                 self.error = "Nichts gefunden."
+            } else if selectFirst {
+                self.select(self.results[0])
             }
         }
     }

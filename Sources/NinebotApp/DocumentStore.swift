@@ -292,6 +292,54 @@ final class DocumentStore: ObservableObject {
     }
 
     func requestNotificationPermission() {
+        guard !DemoMode.isActive else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 }
+
+#if DEBUG
+// MARK: - Beispieldaten für Screenshots
+
+extension DocumentStore {
+    func loadDemo() {
+        isUnlocked = true
+        for document in documents { try? FileManager.default.removeItem(at: fileURL(for: document)) }
+        documents = []
+
+        let lastYear = Calendar.current.date(byAdding: .year, value: -1, to: DocumentStore.insuranceYearEnd()) ?? Date()
+        add(ScooterDocument(kind: .insurance, title: "Versicherung 2025/26", insurer: "Muster-Versicherung AG",
+                            plate: "812 KLM", contractNumber: "KV-2025-004711", validUntil: lastYear, fileName: ""),
+            pdf: DocumentStore.demoPDF(title: "Versicherungsbestätigung 2025/26", lines: ["Kennzeichen 812 KLM"]))
+        add(ScooterDocument(kind: .insurance, title: "Versicherung 2026/27", insurer: "Muster-Versicherung AG",
+                            plate: "347 BXT", contractNumber: "KV-2026-004711",
+                            validUntil: DocumentStore.insuranceYearEnd(), fileName: ""),
+            pdf: DocumentStore.demoPDF(title: "Versicherungsbestätigung 2026/27",
+                                       lines: ["Versicherungskennzeichen: 347 BXT",
+                                               "Fahrzeug: Segway-Ninebot KickScooter F2 Pro D",
+                                               "Versicherungsjahr: 01.03.2026 – 28.02.2027",
+                                               "Haftpflicht, Teilkasko"]))
+        add(ScooterDocument(kind: .permit, title: "Datenbestätigung F2 Pro D", fileName: ""),
+            pdf: DocumentStore.demoPDF(title: "Datenbestätigung", lines: ["Elektrokleinstfahrzeug nach eKFV",
+                                                                          "Modell 051203D", "Höchstgeschwindigkeit 20 km/h"]))
+        add(ScooterDocument(kind: .receipt, title: "Rechnung Fachhandel",
+                            validUntil: Calendar.current.date(byAdding: .year, value: 2, to: Date()), fileName: ""),
+            pdf: DocumentStore.demoPDF(title: "Rechnung", lines: ["Segway-Ninebot F2 Pro D", "699,00 EUR"]))
+    }
+
+    static func demoPDF(title: String, lines: [String]) -> Data {
+        let bounds = CGRect(x: 0, y: 0, width: 595, height: 842)
+        return UIGraphicsPDFRenderer(bounds: bounds).pdfData { context in
+            context.beginPage()
+            let big = [NSAttributedString.Key.font: UIFont.boldSystemFont(ofSize: 26)]
+            let body = [NSAttributedString.Key.font: UIFont.systemFont(ofSize: 16)]
+            (title as NSString).draw(at: CGPoint(x: 50, y: 70), withAttributes: big)
+            for (i, line) in lines.enumerated() {
+                (line as NSString).draw(at: CGPoint(x: 50, y: 130 + CGFloat(i) * 28), withAttributes: body)
+            }
+            let mark: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 110),
+                                                        .foregroundColor: UIColor.systemRed.withAlphaComponent(0.15)]
+            ("MUSTER" as NSString).draw(at: CGPoint(x: 80, y: 420), withAttributes: mark)
+        }
+    }
+}
+#endif

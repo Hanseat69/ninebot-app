@@ -53,7 +53,7 @@ enum NinebotBLEError: LocalizedError {
 
 final class NinebotBLEManager: NSObject {
 
-    private var centralManager: CBCentralManager!
+    private var centralManager: CBCentralManager?
     private var scooterPeripheral: CBPeripheral?
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
@@ -82,12 +82,13 @@ final class NinebotBLEManager: NSObject {
         super.init()
         // Mit Restore-Kennung startet iOS die App im Hintergrund neu, wenn sich der
         // gemerkte Scooter meldet, selbst wenn die App zwischendurch beendet wurde.
+        guard !DemoMode.isActive else { return }   // Screenshots: kein Bluetooth
         centralManager = CBCentralManager(delegate: self, queue: nil, options: [
             CBCentralManagerOptionRestoreIdentifierKey: "NinebotCentral"
         ])
     }
 
-    var isPoweredOn: Bool { centralManager.state == .poweredOn }
+    var isPoweredOn: Bool { centralManager?.state == .poweredOn }
 
     /// Findet einen früher verbundenen Scooter wieder, ohne zu suchen.
     func peripheral(withIdentifier id: UUID) -> CBPeripheral? {
@@ -95,7 +96,7 @@ final class NinebotBLEManager: NSObject {
             return restored
         }
         guard isPoweredOn else { return nil }
-        return centralManager.retrievePeripherals(withIdentifiers: [id]).first
+        return centralManager?.retrievePeripherals(withIdentifiers: [id]).first
     }
 
     // MARK: - Öffentliche API
@@ -103,8 +104,8 @@ final class NinebotBLEManager: NSObject {
     /// Startet die Suche. Ist Bluetooth noch nicht bereit, beginnt sie, sobald es das ist.
     func startScanning() {
         scanRequested = true
-        guard centralManager.state == .poweredOn else {
-            if let problem = bluetoothProblem(centralManager.state) {
+        guard let centralManager = centralManager, centralManager.state == .poweredOn else {
+            if let state = centralManager?.state, let problem = bluetoothProblem(state) {
                 scanRequested = false
                 onError?(NinebotBLEError.bluetoothUnavailable(problem))
             }
@@ -118,8 +119,8 @@ final class NinebotBLEManager: NSObject {
 
     func stopScanning() {
         scanRequested = false
-        if centralManager.state == .poweredOn {
-            centralManager.stopScan()
+        if centralManager?.state == .poweredOn {
+            centralManager?.stopScan()
         }
     }
 
@@ -128,7 +129,7 @@ final class NinebotBLEManager: NSObject {
     func connect(to peripheral: CBPeripheral) {
         stopScanning()
         if let previous = scooterPeripheral, previous.identifier != peripheral.identifier {
-            centralManager.cancelPeripheralConnection(previous)
+            centralManager?.cancelPeripheralConnection(previous)
         }
         resetConnectionState()
         scooterPeripheral = peripheral
@@ -136,13 +137,13 @@ final class NinebotBLEManager: NSObject {
         if peripheral.state == .connected {
             peripheral.discoverServices([NinebotBLE.uartServiceUUID])
         } else {
-            centralManager.connect(peripheral, options: nil)
+            centralManager?.connect(peripheral, options: nil)
         }
     }
 
     func disconnect() {
         guard let peripheral = scooterPeripheral else { return }
-        centralManager.cancelPeripheralConnection(peripheral)
+        centralManager?.cancelPeripheralConnection(peripheral)
     }
 
     /// Sendet einen fertig verschlüsselten Frame, aufgeteilt in 20-Byte-Stücke.

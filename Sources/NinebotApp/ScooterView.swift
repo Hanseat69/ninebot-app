@@ -9,9 +9,16 @@ struct ScooterView: View {
     @EnvironmentObject private var model: ScooterModel
     @EnvironmentObject private var maintenance: MaintenanceStore
     @EnvironmentObject private var documents: DocumentStore
+    /// Nur für Screenshots: zu diesem Abschnitt scrollen.
+    var scrollTarget: String? = nil
+
+    init(scrollTarget: String? = nil) {
+        self.scrollTarget = scrollTarget
+    }
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             List {
                 Section {
                     HStack(spacing: 12) {
@@ -25,9 +32,9 @@ struct ScooterView: View {
 
                 switch model.state {
                 case .authenticated:
-                    liveSection
-                    settingsSection
-                    vehicleSection
+                    liveSection.id("live")
+                    settingsSection.id("settings")
+                    vehicleSection.id("vehicle")
                     Section {
                         Button("Trennen", role: .destructive) { model.disconnect() }
                     }
@@ -40,13 +47,21 @@ struct ScooterView: View {
                 }
 
                 if model.weatherEnabled {
-                    weatherSection
+                    weatherSection.id("weather")
                 }
-                documentsSection
-                maintenanceSection
-                automationSection
+                documentsSection.id("documents")
+                maintenanceSection.id("maintenance")
+                automationSection.id("automation")
             }
             .refreshable { model.refreshWeather(force: true) }
+            .onAppear {
+                if let target = scrollTarget {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        proxy.scrollTo(target, anchor: .top)
+                    }
+                }
+            }
+            }
             .navigationTitle(model.connectedName ?? "Ninebot")
         }
     }

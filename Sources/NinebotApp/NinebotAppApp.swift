@@ -8,26 +8,24 @@ struct NinebotAppApp: App {
     private let documents = DocumentStore()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        #if DEBUG
+        if let screen = DemoMode.screen {
+            DemoData.load(screen: screen, model: model, documents: documents)
+        }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
-            TabView {
-                ScooterView()
-                    .tabItem { Label("Scooter", systemImage: "scooter") }
-                RoutePlannerView()
-                    .tabItem { Label("Route", systemImage: "arrow.triangle.turn.up.right.diamond") }
-                TripListView()
-                    .tabItem { Label("Fahrten", systemImage: "map") }
-                BatteryView()
-                    .tabItem { Label("Akku", systemImage: "battery.75") }
-                HelpView()
-                    .tabItem { Label("Hilfe", systemImage: "questionmark.circle") }
-            }
-            .environmentObject(model)
-            .environmentObject(model.store)
-            .environmentObject(model.maintenance)
-            .environmentObject(documents)
+            root
+                .environmentObject(model)
+                .environmentObject(model.store)
+                .environmentObject(model.maintenance)
+                .environmentObject(documents)
         }
         .onChange(of: scenePhase) { phase in
+            guard !DemoMode.isActive else { return }
             switch phase {
             case .active:
                 documents.reload()
@@ -38,5 +36,17 @@ struct NinebotAppApp: App {
                 break
             }
         }
+    }
+
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+        if let screen = DemoMode.screen {
+            DemoRootView(screen: screen)
+        } else {
+            MainTabView()
+        }
+        #else
+        MainTabView()
+        #endif
     }
 }
