@@ -1,337 +1,324 @@
 //
 //  NinebotSession.swift
-//  Steuert den dreiphasigen Auth-Handshake (PRE_COMM → SET_PWD → AUTH) und bietet
-//  danach verschlüsseltes Lesen/Schreiben von Registern, inkl. Sport-Modus-Geschwindigkeitslimit.
+//  Verbindet sich mit dem Scooter, führt den Auth-Handshake durch
+//  (INIT → PING → PAIR) und bietet danach verschlüsseltes Lesen/Schreiben von Registern.
 //
-//  Verwendung:
-//    let session = NinebotSession(bleManager: myNinebotBLEManager, deviceName: "MIScooterXXXX")
-//    session.onStateChange = { state in ... }   // UI-Feedback anzeigen ("Knopf drücken" usw.)
-//    session.pair()
-//    // sobald .authenticated:
-//    session.setSportModeSpeedLimit(kmh: 25) { result in ... }
+//  Ablauf wie in ninebot-ble (https://github.com/ownbee/ninebot-ble), das an der
+//  F-Serie getestet ist:
+//  1. INIT: Scooter liefert seinen BLE-Schlüssel und die Seriennummer.
+//  2. PING mit zufälligem App-Schlüssel. Antwort-Index 0 = noch nicht gekoppelt:
+//     dann den POWER-Knopf am Scooter drücken, bis er bestätigt.
+//  3. PAIR mit der Seriennummer → verbunden.
 //
-//  ACHTUNG — vor dem Testen lesen:
-//  - Bei der ERSTEN Kopplung musst du (wie bei der offiziellen App) innerhalb von ~5-60 s
-//    einen physischen Knopf am Scooter drücken (SET_PWD-Phase, siehe State .waitingForButtonPress).
-//  - Diese Implementierung folgt der veröffentlichten Protokollspezifikation 1:1, ist aber
-//    NICHT an einem echten E2 Pro getestet. Teste zuerst mit einem LESE-Befehl (z. B. aktuelles
-//    Geschwindigkeitslimit auslesen), bevor du einen Schreibbefehl sendest.
-//  - Nur mit dem eigenen Fahrzeug verwenden — der Handshake erfordert ohnehin den physischen
-//    Knopf am Scooter, funktioniert also ohne Zugang zum Gerät selbst nicht an
-//    fremden Scootern.
+//  Nur mit dem eigenen Fahrzeug verwenden — der Handshake erfordert ohnehin den
+//  physischen Knopf am Scooter.
 //
 
 import Foundation
 import CoreBluetooth
-import CryptoKit
+import Security
 
 enum NinebotSessionState: Equatable {
     case idle
     case connecting
-    case preComm
-    case settingPassword
+    case initializing
     case waitingForButtonPress
-    case authenticating
+    case pairing
     case authenticated
     case failed(String)
+}
+
+enum NinebotSessionError: LocalizedError {
+    case notAuthenticated
+    case timeout
+    case invalidResponse
+    case disconnected
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated: return "Nicht verbunden"
+        case .timeout: return "Keine Antwort vom Scooter"
+        case .invalidResponse: return "Ungültige Antwort vom Scooter"
+        case .disconnected: return "Verbindung getrennt"
+        }
+    }
 }
 
 final class NinebotSession {
 
     private let bleManager: NinebotBLEManager
-    private let deviceName: String
-    private let boardTarget: UInt8 = 0x04   // BLE-Board, wie dokumentiert
+    private var crypto: NinebotCrypto?
 
-    private var key1: [UInt8] = []
-    private var key2: [UInt8]? = nil
-    private var authParam: [UInt8] = []
+    private let appKey: [UInt8] = NinebotSession.randomBytes(16)
     private var serialNumber: [UInt8] = []
-    private var sessionPassword: [UInt8] = []
-    private var counter: UInt32 = 0
-    private var lastReceivedCounter: UInt32 = 0
 
-    private var pendingResponseHandler: ((Result<[UInt8], Error>) -> Void)?
-    private var buttonPressRetryTimer: Timer?
+    /// Wie lange auf den Knopfdruck am Scooter gewartet wird.
     private let buttonPressTimeout: TimeInterval = 60
+    private var buttonTimer: Timer?
+    private var buttonDeadline = Date()
+    private var userDisconnect = false
+
+    // Anfragen werden nacheinander abgearbeitet; jede wird bis zum Timeout
+    // jede Sekunde neu gesendet (wie NinebotClient.request in ninebot-ble).
+    private struct Request {
+        let packet: NinebotPacket
+        let timeout: TimeInterval
+        let completion: (Result<NinebotPacket, Error>) -> Void
+    }
+    private var queue: [Request] = []
+    private var current: Request?
+    private var currentDeadline = Date()
+    private var retryTimer: Timer?
 
     var onStateChange: ((NinebotSessionState) -> Void)?
     private(set) var state: NinebotSessionState = .idle {
         didSet { onStateChange?(state) }
     }
 
-    init(bleManager: NinebotBLEManager, deviceName: String) {
+    init(bleManager: NinebotBLEManager) {
         self.bleManager = bleManager
-        self.deviceName = deviceName
-        self.bleManager.delegate = self
-        self.bleManager.onCharacteristicsReady = { [weak self] in
-            self?.startPreComm()
-        }
+        bleManager.onReady = { [weak self] in self?.startInit() }
+        bleManager.onFrame = { [weak self] frame in self?.handleFrame(frame) }
+        bleManager.onDisconnect = { [weak self] error in self?.handleDisconnect(error) }
+        bleManager.onError = { [weak self] error in self?.fail(error.localizedDescription) }
     }
 
     // MARK: - Öffentlicher Ablauf
 
-    func pair() {
-        counter = 0
-        lastReceivedCounter = 0
+    /// Verbindet mit dem gewählten Scooter. `name` muss der Name sein, den er
+    /// bewirbt — er geht in den Schlüssel ein.
+    func connect(to scooter: DiscoveredScooter) {
+        userDisconnect = false
         state = .connecting
-        bleManager.startScanning()
+        reset()
+        crypto = NinebotCrypto(name: Array(scooter.name.utf8))
+        bleManager.connect(to: scooter.peripheral)
     }
 
-    /// Liest ein Register (ohne Änderung) — nutze das zuerst, um zu prüfen,
-    /// ob der Handshake funktioniert und welches Register dem Geschwindigkeitslimit entspricht.
-    /// cmd = READ (0x01), index = Registeradresse, data = [Anzahl zu lesender Bytes]
-    func readRegister(_ register: UInt8, byteCount: UInt8 = 2, completion: @escaping (Result<[UInt8], Error>) -> Void) {
+    func disconnect() {
+        userDisconnect = true
+        state = .idle
+        reset()
+        bleManager.disconnect()
+    }
+
+    /// Liest ein Register (bzw. mehrere aufeinanderfolgende) und liefert die Rohbytes.
+    func read(_ register: NinebotRegister, completion: @escaping (Result<[UInt8], Error>) -> Void) {
+        readRange(device: register.device, from: register.index, count: register.count,
+                  collected: [], completion: completion)
+    }
+
+    /// Schreibt 2 Bytes (Little-Endian) in ein Register der Hauptsteuerung.
+    func writeRegister(_ index: UInt8, value: Int16, completion: @escaping (Result<Void, Error>) -> Void) {
         guard state == .authenticated else {
             completion(.failure(NinebotSessionError.notAuthenticated))
             return
         }
-        sendEncryptedCommand(cmd: 0x01, index: register, data: [byteCount], completion: completion)
-    }
-
-    /// cmd = WRITE-mit-Bestätigung (0x02), index = Registeradresse, data = neuer Wert (Little-Endian)
-    func writeRegister(_ register: UInt8, data: [UInt8], completion: @escaping (Result<[UInt8], Error>) -> Void) {
-        guard state == .authenticated else {
-            completion(.failure(NinebotSessionError.notAuthenticated))
-            return
+        let raw = UInt16(bitPattern: value)
+        let packet = NinebotPacket(target: .controller, command: .write, index: index,
+                                   data: [UInt8(raw & 0xFF), UInt8(raw >> 8)])
+        request(packet) { result in
+            completion(result.map { _ in () })
         }
-        sendEncryptedCommand(cmd: 0x02, index: register, data: data, completion: completion)
     }
 
-    /// Setzt das Geschwindigkeitslimit des Sport-Modus.
-    /// - Parameter kmh: gewünschtes Limit in km/h
-    /// - Important: prüfe zuerst per readRegister, welches Register/welche Einheit dein Gerät
-    ///   tatsächlich verwendet — 0x74 in m/h basiert auf dem älteren Ninebot-One-Protokoll
-    ///   und ist für das Encryption2-Protokoll des E2 Pro NICHT ausdrücklich bestätigt.
-    func setSportModeSpeedLimit(kmh: Double, completion: @escaping (Result<Void, Error>) -> Void) {
-        let mPerHour = UInt16(kmh * 1000)
-        let data: [UInt8] = [UInt8(mPerHour & 0xFF), UInt8((mPerHour >> 8) & 0xFF)]
-        writeRegister(0x74, data: data) { result in
-            switch result {
-            case .success: completion(.success(()))
-            case .failure(let error): completion(.failure(error))
+    // MARK: - Handshake
+
+    private func startInit() {
+        guard state == .connecting else { return }
+        state = .initializing
+        request(NinebotPacket(target: .ble, command: .initialize)) { [weak self] result in
+            guard let self = self, self.state == .initializing else { return }
+            guard case .success(let response) = result, response.data.count >= 16 else {
+                self.fail("Handshake (INIT): \(self.describe(result))")
+                return
+            }
+            self.serialNumber = Array(response.data.dropFirst(16))
+            self.crypto?.setBleData(Array(response.data.prefix(16)))
+            self.sendPing()
+        }
+    }
+
+    private func sendPing() {
+        request(NinebotPacket(target: .ble, command: .ping, data: appKey)) { [weak self] result in
+            guard let self = self, self.state == .initializing else { return }
+            guard case .success(let response) = result else {
+                self.fail("Handshake (PING): \(self.describe(result))")
+                return
+            }
+            if response.index == 0 {
+                self.waitForButtonPress()
+            } else {
+                // Schon gekoppelt. ninebot-ble behält hier den bisherigen Schlüssel;
+                // klappt PAIR damit nicht, versucht startPair es mit dem App-Schlüssel.
+                self.startPair(alternateKeyOnTimeout: true)
             }
         }
     }
 
-    // MARK: - Frame bauen/senden
-
-    private func buildPlaintextFrame(cmd: UInt8, index: UInt8, data: [UInt8]) -> [UInt8] {
-        var frame: [UInt8] = [0x5A, 0xA5, UInt8(data.count & 0xFF)]
-        frame.append(0x3E)          // source = Telefon
-        frame.append(boardTarget)   // target = BLE-Board
-        frame.append(cmd)
-        frame.append(index)
-        frame.append(contentsOf: data)
-        return frame
+    /// Sendet jede Sekunde PAIR, bis der Scooter den Knopfdruck bestätigt.
+    private func waitForButtonPress() {
+        state = .waitingForButtonPress
+        buttonDeadline = Date().addingTimeInterval(buttonPressTimeout)
+        buttonTimer?.invalidate()
+        buttonTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if Date() > self.buttonDeadline {
+                self.fail("Kein Knopfdruck am Scooter innerhalb von \(Int(self.buttonPressTimeout)) s")
+                return
+            }
+            self.send(NinebotPacket(target: .ble, command: .pair, data: self.serialNumber))
+        }
     }
 
-    private func sendEncryptedCommand(cmd: UInt8, index: UInt8, data: [UInt8],
-                                       completion: @escaping (Result<[UInt8], Error>) -> Void) {
-        let plaintext = buildPlaintextFrame(cmd: cmd, index: index, data: data)
-        let key = NinebotCrypto.deriveKey(key1: sessionPassword, key2: authParam)
-        counter += 1
-        let frame = NinebotCrypto.encryptSN(key: key, plaintext: plaintext, counter: counter, auth: authParam)
-        pendingResponseHandler = { result in
+    private func handleButtonPressResponse(_ packet: NinebotPacket) {
+        guard packet.source == NinebotDevice.ble.rawValue, packet.index == 1 else { return }
+        if packet.command == NinebotCommand.ping.rawValue {
+            buttonTimer?.invalidate()
+            crypto?.setAppData(appKey)
+            startPair(alternateKeyOnTimeout: false)
+        } else if packet.command == NinebotCommand.pair.rawValue {
+            buttonTimer?.invalidate()
+            startPair(alternateKeyOnTimeout: false)
+        }
+    }
+
+    private func startPair(alternateKeyOnTimeout: Bool) {
+        state = .pairing
+        request(NinebotPacket(target: .ble, command: .pair, data: serialNumber)) { [weak self] result in
+            guard let self = self, self.state == .pairing else { return }
             switch result {
-            case .success(let plaintextResponse):
-                // plaintextResponse = [0x5A,0xA5,LEN, srcBoard, dest, cmd, index, data...]
-                let payload = plaintextResponse.count > 7 ? Array(plaintextResponse.dropFirst(7)) : []
-                completion(.success(payload))
+            case .success:
+                self.state = .authenticated
+            case .failure(NinebotSessionError.timeout) where alternateKeyOnTimeout:
+                self.crypto?.setAppData(self.appKey)
+                self.startPair(alternateKeyOnTimeout: false)
+            case .failure:
+                self.fail("Handshake (PAIR): \(self.describe(result))")
+            }
+        }
+    }
+
+    // MARK: - Register lesen
+
+    private func readRange(device: NinebotDevice, from index: UInt8, count: Int, collected: [UInt8],
+                           completion: @escaping (Result<[UInt8], Error>) -> Void) {
+        guard state == .authenticated else {
+            completion(.failure(NinebotSessionError.notAuthenticated))
+            return
+        }
+        guard count > 0 else {
+            completion(.success(collected))
+            return
+        }
+        // Wie in ninebot-ble: pro Register 2 Bytes anfordern.
+        let packet = NinebotPacket(target: device, command: .read, index: index, data: [2])
+        request(packet) { [weak self] result in
+            switch result {
+            case .success(let response):
+                self?.readRange(device: device, from: index &+ 1, count: count - 1,
+                                collected: collected + response.data, completion: completion)
             case .failure(let error):
                 completion(.failure(error))
             }
         }
-        bleManager.sendRaw(Data(frame))
     }
 
-    // MARK: - Handshake-Phasen
+    // MARK: - Senden / Empfangen
 
-    private func startPreComm() {
-        state = .preComm
-        key1 = Array(deviceName.utf8)
-        key2 = nil
-        counter = 0
-
-        let plaintext = buildPlaintextFrame(cmd: 0x5B, index: 0x00, data: [])
-        let key = NinebotCrypto.deriveKey(key1: key1, key2: key2)
-        let frame = NinebotCrypto.encryptNonSN(key: key, plaintext: plaintext)
-
-        pendingResponseHandler = { [weak self] result in
-            self?.handlePreCommResponse(result)
-        }
-        bleManager.sendRaw(Data(frame))
+    private func send(_ packet: NinebotPacket) {
+        guard let crypto = crypto else { return }
+        bleManager.send(crypto.encrypt(packet.pack()))
     }
 
-    private func handlePreCommResponse(_ result: Result<[UInt8], Error>) {
-        guard case .success(let plaintext) = result, plaintext.count >= 7 + 30 else {
-            state = .failed("PRE_COMM: ungültige Antwort")
-            return
-        }
-        let data = Array(plaintext.dropFirst(7))
-        authParam = Array(data.prefix(16))
-        serialNumber = Array(data[16..<30])
-        counter = 1   // ab jetzt SN-Modus, Counter startet bei 1 (erstes Encrypt -> 2)
-        startSetPassword()
+    private func request(_ packet: NinebotPacket, timeout: TimeInterval = 5,
+                         completion: @escaping (Result<NinebotPacket, Error>) -> Void) {
+        queue.append(Request(packet: packet, timeout: timeout, completion: completion))
+        startNextRequest()
     }
 
-    private func startSetPassword() {
-        state = .settingPassword
-        key1 = Array(deviceName.utf8)
-        key2 = authParam
-
-        sessionPassword = generateSessionPassword(authParam: authParam)
-
-        let plaintext = buildPlaintextFrame(cmd: 0x5C, index: 0x00, data: sessionPassword)
-        let key = NinebotCrypto.deriveKey(key1: key1, key2: key2)
-        counter += 1
-        let frame = NinebotCrypto.encryptSN(key: key, plaintext: plaintext, counter: counter, auth: authParam)
-
-        pendingResponseHandler = { [weak self] result in
-            self?.handleSetPasswordResponse(result)
-        }
-        bleManager.sendRaw(Data(frame))
-        scheduleButtonPressRetry()
-    }
-
-    private func scheduleButtonPressRetry() {
-        buttonPressRetryTimer?.invalidate()
-        state = .waitingForButtonPress
-        buttonPressRetryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
-            guard let self = self else { timer.invalidate(); return }
-            guard self.state == .waitingForButtonPress else { timer.invalidate(); return }
-            // SET_PWD mit demselben Passwort erneut senden, bis bestätigt oder Timeout
-            let plaintext = self.buildPlaintextFrame(cmd: 0x5C, index: 0x00, data: self.sessionPassword)
-            let key = NinebotCrypto.deriveKey(key1: self.key1, key2: self.key2)
-            self.counter += 1
-            let frame = NinebotCrypto.encryptSN(key: key, plaintext: plaintext, counter: self.counter, auth: self.authParam)
-            self.bleManager.sendRaw(Data(frame))
+    private func startNextRequest() {
+        guard current == nil, !queue.isEmpty else { return }
+        let next = queue.removeFirst()
+        current = next
+        currentDeadline = Date().addingTimeInterval(next.timeout)
+        send(next.packet)
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self, let request = self.current else { return }
+            if Date() > self.currentDeadline {
+                self.finishCurrent(.failure(NinebotSessionError.timeout))
+            } else {
+                self.send(request.packet)
+            }
         }
     }
 
-    private func handleSetPasswordResponse(_ result: Result<[UInt8], Error>) {
-        guard case .success(let plaintext) = result, plaintext.count >= 7 else {
-            state = .failed("SET_PWD: ungültige Antwort")
-            return
-        }
-        let index = plaintext[6]
-        if index == 1 {
-            buttonPressRetryTimer?.invalidate()
-            startAuth()
-        }
-        // index == 0: noch auf Knopfdruck warten, der Retry-Timer erledigt den Rest
+    private func finishCurrent(_ result: Result<NinebotPacket, Error>) {
+        retryTimer?.invalidate()
+        retryTimer = nil
+        guard let request = current else { return }
+        current = nil
+        request.completion(result)
+        startNextRequest()
     }
 
-    private func startAuth() {
-        state = .authenticating
-        key1 = sessionPassword
-        key2 = authParam
+    private func handleFrame(_ frame: [UInt8]) {
+        guard let plaintext = crypto?.decrypt(frame),
+              let packet = NinebotPacket.unpack(plaintext) else { return }   // Unlesbares ignorieren
 
-        let plaintext = buildPlaintextFrame(cmd: 0x5D, index: 0x00, data: serialNumber)
-        let key = NinebotCrypto.deriveKey(key1: key1, key2: key2)
-        counter += 1
-        let frame = NinebotCrypto.encryptSN(key: key, plaintext: plaintext, counter: counter, auth: authParam)
-
-        pendingResponseHandler = { [weak self] result in
-            self?.handleAuthResponse(result)
+        if state == .waitingForButtonPress {
+            handleButtonPressResponse(packet)
+        } else if let request = current, packet.isResponse(to: request.packet) {
+            finishCurrent(.success(packet))
         }
-        bleManager.sendRaw(Data(frame))
+        // Alles andere (z. B. späte Antworten auf wiederholte Anfragen) wird ignoriert.
     }
 
-    private func handleAuthResponse(_ result: Result<[UInt8], Error>) {
-        guard case .success(let plaintext) = result, plaintext.count >= 7 else {
-            state = .failed("AUTH: ungültige Antwort")
-            return
-        }
-        let index = plaintext[6]
-        if index == 1 {
-            state = .authenticated
-        } else {
-            state = .failed("AUTH: vom Fahrzeug abgelehnt")
-        }
-    }
-
-    // MARK: - Passwortgenerierung (Java-LCG + SHA-256, siehe Authentifizierungs-Doku)
-
-    private func generateSessionPassword(authParam: [UInt8]) -> [UInt8] {
-        let timeMs = Int64(Date().timeIntervalSince1970 * 1000)
-
-        var seedValue: Int32 = 0
-        for (i, b) in authParam.enumerated() {
-            let signedByte: Int32 = b < 128 ? Int32(b) : Int32(b) - 256
-            let shift = (i % 8) * 8
-            let val = signedByte << Int32(shift & 31)
-            seedValue = seedValue &+ val
-        }
-        let seed = timeMs &+ Int64(seedValue)
-
-        var rng = JavaRandom(seed: seed)
-        let randomBytes = rng.nextBytes(count: 16)
-
-        let hash = SHA256Helper.hash(Data(randomBytes))
-        return Array(hash.prefix(16))
-    }
-}
-
-enum NinebotSessionError: Error {
-    case notAuthenticated
-    case timeout
-}
-
-// MARK: - CoreBluetooth-Anbindung
-
-extension NinebotSession: NinebotBLEManagerDelegate {
-
-    func ninebotManager(_ manager: NinebotBLEManager, didDiscover peripheral: CBPeripheral, rssi: NSNumber) {
-        guard peripheral.name == deviceName else { return }
-        manager.connect(to: peripheral)
-    }
-
-    func ninebotManager(_ manager: NinebotBLEManager, didConnect peripheral: CBPeripheral) {
-        // Der Handshake startet erst über onCharacteristicsReady (siehe init), sobald Write-
-        // und Notify-Characteristic tatsächlich gefunden sind — nicht schon hier.
-    }
-
-    func ninebotManager(_ manager: NinebotBLEManager, didDisconnect peripheral: CBPeripheral, error: Error?) {
-        buttonPressRetryTimer?.invalidate()
-        if state != .authenticated {
-            state = .failed("Verbindung während des Handshakes getrennt")
-        } else {
-            state = .idle
-        }
-    }
-
-    func ninebotManager(_ manager: NinebotBLEManager, didReceiveRawData data: Data) {
-        let key: [UInt8]
+    private func handleDisconnect(_ error: Error?) {
         switch state {
-        case .preComm:
-            key = NinebotCrypto.deriveKey(key1: key1, key2: key2)
-        case .settingPassword, .waitingForButtonPress:
-            key = NinebotCrypto.deriveKey(key1: key1, key2: key2)
-        case .authenticating:
-            key = NinebotCrypto.deriveKey(key1: sessionPassword, key2: authParam)
-        case .authenticated:
-            key = NinebotCrypto.deriveKey(key1: sessionPassword, key2: authParam)
+        case .idle, .failed:
+            break
         default:
-            return
+            state = userDisconnect
+                ? .idle
+                : .failed(error?.localizedDescription ?? NinebotSessionError.disconnected.localizedDescription)
         }
+        reset()
+    }
 
-        do {
-            let (plaintext, _) = try NinebotCrypto.decrypt(key: key, ciphertext: Array(data), auth: authParam)
-            pendingResponseHandler?(.success(plaintext))
-        } catch {
-            pendingResponseHandler?(.failure(error))
+    // MARK: - Hilfen
+
+    private func fail(_ reason: String) {
+        state = .failed(reason)
+        reset()
+        bleManager.disconnect()
+    }
+
+    /// Stoppt alle Timer und bricht offene Anfragen ab. Vorher `state` setzen:
+    /// Die Handshake-Schritte prüfen ihn und ignorieren abgebrochene Anfragen.
+    private func reset() {
+        buttonTimer?.invalidate()
+        buttonTimer = nil
+        retryTimer?.invalidate()
+        retryTimer = nil
+        let pending = (current.map { [$0] } ?? []) + queue
+        current = nil
+        queue = []
+        pending.forEach { $0.completion(.failure(NinebotSessionError.disconnected)) }
+    }
+
+    private func describe(_ result: Result<NinebotPacket, Error>) -> String {
+        switch result {
+        case .success: return NinebotSessionError.invalidResponse.localizedDescription
+        case .failure(let error): return error.localizedDescription
         }
     }
 
-    func ninebotManager(_ manager: NinebotBLEManager, didFailWithError error: Error) {
-        state = .failed(error.localizedDescription)
-    }
-}
-
-// MARK: - SHA-256-Helfer (CryptoKit-Wrapper, für bessere Lesbarkeit oben)
-
-enum SHA256Helper {
-    static func hash(_ data: Data) -> [UInt8] {
-        Array(SHA256.hash(data: data))
+    private static func randomBytes(_ count: Int) -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: count)
+        if SecRandomCopyBytes(kSecRandomDefault, count, &bytes) != errSecSuccess {
+            bytes = (0..<count).map { _ in UInt8.random(in: 0...255) }
+        }
+        return bytes
     }
 }

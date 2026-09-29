@@ -1,7 +1,8 @@
 # NinebotApp — bauen ohne Mac
 
-Dieses Repo enthält eine iOS-App (SwiftUI + CoreBluetooth), die über GitHub
-Actions automatisch zu einer `.ipa`-Datei gebaut wird, ohne dass du selbst
+Dieses Repo enthält eine iOS-App (SwiftUI + CoreBluetooth) für den
+**Segway-Ninebot F2 Pro** (und andere Ninebot-Scooter der F-Serie). Sie wird über
+GitHub Actions automatisch zu einer `.ipa`-Datei gebaut, ohne dass du selbst
 einen Mac oder Xcode brauchst.
 
 ## Einmalige Einrichtung
@@ -52,11 +53,27 @@ neuer Build nötig, außer du hast den Code geändert).
 
 ## Was steckt in der App
 
-Ein Testbildschirm (`NinebotTestView`) mit Knöpfen, um dich mit deinem
-Scooter zu verbinden, den Auth-Handshake zu durchlaufen, das
-Geschwindigkeitsregister auszulesen und das Sport-Modus-Limit zu setzen.
+1. **Scooter suchen:** Die App findet Ninebot-Scooter in der Nähe anhand der
+   Ninebot-Herstellerkennung in der Bluetooth-Werbung. Ein fester Gerätename
+   ist nicht nötig — einfach den eigenen Scooter in der Liste antippen.
+2. **Koppeln:** Beim ersten Verbinden fordert die App auf, den **Power-Knopf**
+   am Scooter kurz zu drücken (60 Sekunden Zeit).
+3. **Werte:** Akku (%, Spannung, Strom, Temperatur, Zustand), Restreichweite,
+   Gesamtkilometer, Fahrzeugtemperatur, Fahrmodus, Tempolimits, Sperrstatus,
+   Fehlercode, Firmware und Seriennummer.
+4. **Tempolimit (Begrenzungsmodus):** Setzt die Höchstgeschwindigkeit im
+   Begrenzungsmodus (6–20 km/h). Der Regler endet bewusst bei 20 km/h, dem
+   gesetzlichen Maximum für E-Scooter in Deutschland (eKFV).
 
-Der Bluetooth-Name des Scooters ist in
-`Sources/NinebotApp/NinebotTestView.swift` fest eingetragen (aktuell
-`"E2 Pro 0923"`). Wenn dein Scooter anders heißt, passe ihn dort vor dem
-Build an.
+### Grundlage und Stand
+
+Protokoll, Verschlüsselung und Register folgen den Open-Source-Projekten
+[ninebot-ble](https://github.com/ownbee/ninebot-ble) (entwickelt an einem
+Ninebot der F-Serie) und [miauth](https://github.com/dnandha/miauth).
+Die Verschlüsselung ist mit Testvektoren aus miauth geprüft und liefert
+Byte für Byte dasselbe Ergebnis. An einem echten F2 Pro getestet ist die App
+noch nicht. Das **Schreiben** des Tempolimits ist in der Referenz nicht
+enthalten (dort wird nur gelesen) — nach dem Setzen liest die App den Wert
+zur Kontrolle erneut aus.
+
+Nur mit dem eigenen Fahrzeug verwenden.
